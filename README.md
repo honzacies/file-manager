@@ -1,6 +1,6 @@
 # Cloud
 
-Domácí cloud: soubory, uživatelé, koš, sdílení odkazem, náhledy (obrázky, video, audio, PDF, text).
+Domácí cloud: soubory, uživatelé, kvóty, koš, sdílení odkazem, náhledy (obrázky, video, audio, PDF, text).
 Běží jako jeden Docker kontejner — Fastify API servíruje i statický export Next.js webu.
 
 ```
@@ -30,7 +30,7 @@ Soubory leží na disku normálně jako `<CLOUD_DIR>/<username>/…`, smazané v
 cd Api && npm i && npm run dev        # API na :8080, data v ./data a ./cloud
 cd Web && npm i && npm run dev        # web na :3000, /api se přeposílá na API (API_URL)
 cd Api && npm run create-admin -- honza   # heslo ze stdin
-cd Api && npm run verify              # bezpečnostní self-check (16 kontrol přes app.inject)
+cd Api && npm run verify              # bezpečnostní self-check (17 kontrol přes app.inject)
 ```
 
 ## Bezpečnost v kostce
@@ -44,5 +44,6 @@ cd Api && npm run verify              # bezpečnostní self-check (16 kontrol p�
 
 - Stažení složky jako ZIP — přidat, až bude chybět (`archiver`).
 - Miniatury — grid načítá originály s `loading="lazy"`; generovat až bude pomalé.
-- Kvóty, verze souborů, HTTPS (přes Tailscale lze `tailscale serve`).
+- Verze souborů, HTTPS (přes Tailscale lze `tailscale serve`).
+- Kvóta hlídá jen upload do vlastní složky: koš se nepočítá a admin v „Všech souborech“ ji obchází.
 - Sdílený odkaz po přesunu/přejmenování položky přestane fungovat.

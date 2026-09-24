@@ -204,6 +204,30 @@ try {
     assert.ok(existsSync(path.join(newRoot, "alice", "novy.txt")));
   });
 
+  await Check("kvóta: nad limit 413 a nic nezůstane na disku, bez limitu projde", async () => {
+    const aliceId = (Db.prepare("SELECT id FROM users WHERE username = 'alice'").get() as { id: number }).id;
+    const set = (quotaBytes: number | null) => app.inject({ method: "PATCH", url: `/api/admin/users/${aliceId}`, headers: admin, payload: { quotaBytes } });
+    assert.equal((await set(1000)).statusCode, 200);
+    const storage = (await app.inject({ url: "/api/storage", headers: alice })).json();
+    assert.equal(storage.quota, 1000);
+    assert.equal(typeof storage.used, "number");
+
+    const tooBig = await Upload(alice, "", "velky.bin", "x".repeat(2000));
+    assert.equal(tooBig.statusCode, 413);
+    const aliceDir = path.join(temp, "cloud2", "alice");
+    assert.ok(!existsSync(path.join(aliceDir, "velky.bin")));
+    assert.ok(!(await import("node:fs")).readdirSync(aliceDir).some((name) => name.startsWith(".upload-")), "zůstal dočasný soubor");
+
+    assert.equal((await Upload(alice, "", "maly.bin", "x".repeat(300))).statusCode, 200);
+    assert.equal((await set(null)).statusCode, 200);
+    assert.equal((await Upload(alice, "", "velky.bin", "x".repeat(2000))).statusCode, 200);
+
+    const self = await app.inject({ method: "PATCH", url: `/api/admin/users/${aliceId}`, headers: alice, payload: { quotaBytes: null } });
+    assert.equal(self.statusCode, 403);
+    const listed = (await app.inject({ url: "/api/admin/users", headers: admin })).json();
+    assert.ok(listed.find((u: { username: string }) => u.username === "alice").usedBytes >= 2300);
+  });
+
   await Check("rate limit na přihlášení", async () => {
     let limited = false;
     for (let i = 0; i < 15; i++) {

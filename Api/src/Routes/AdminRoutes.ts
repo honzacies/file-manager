@@ -5,11 +5,13 @@ import type { FastifyInstance, FastifyRequest } from "fastify";
 import { HashPassword, RequireAdmin, RequireUser, VerifyPassword } from "../Auth.ts";
 import { Db, SetSetting } from "../Db.ts";
 import { Env } from "../Env.ts";
-import { GetRootDir, HttpError } from "../Storage.ts";
+import { DirSize, GetRootDir, HttpError } from "../Storage.ts";
 
 const USERNAME = { type: "string", pattern: "^[A-Za-z0-9_-][A-Za-z0-9_.-]{1,31}$" } as const;
 const PASSWORD = { type: "string", minLength: 8, maxLength: 256 } as const;
 const ROLE = { type: "string", enum: ["admin", "user"] } as const;
+// null = bez limitu
+const QUOTA = { type: ["integer", "null"], minimum: 0 } as const;
 
 // Akce, po které vlastník účtu ztratí přístup (reset hesla, smazání), musí
 // potvrdit heslem ten, kdo ji dělá — platná session nestačí.
@@ -30,30 +32,46 @@ export async function AdminRoutes(app: FastifyInstance) {
   app.addHook("preHandler", RequireAdmin);
 
   app.get("/admin/users", async () => {
-    const rows = Db.prepare("SELECT id, username, role, created_at FROM users ORDER BY username").all() as {
+    const rows = Db.prepare("SELECT id, username, role, created_at, quota_bytes FROM users ORDER BY username").all() as {
       id: number;
       username: string;
       role: string;
       created_at: number;
+      quota_bytes: number | null;
     }[];
-    return rows.map((u) => ({ id: u.id, username: u.username, role: u.role, createdAt: u.created_at }));
+    const root = GetRootDir();
+    return Promise.all(
+      rows.map(async (u) => ({
+        id: u.id,
+        username: u.username,
+        role: u.role,
+        createdAt: u.created_at,
+        quotaBytes: u.quota_bytes,
+        usedBytes: await DirSize(path.join(root, u.username)),
+      })),
+    );
   });
 
   app.post(
     "/admin/users",
     {
       schema: {
-        body: { type: "object", required: ["username", "password", "role"], properties: { username: USERNAME, password: PASSWORD, role: ROLE } },
+        body: {
+          type: "object",
+          required: ["username", "password", "role"],
+          properties: { username: USERNAME, password: PASSWORD, role: ROLE, quotaBytes: QUOTA },
+        },
       },
     },
     async (request) => {
-      const { username, password, role } = request.body as { username: string; password: string; role: string };
+      const { username, password, role, quotaBytes } = request.body as { username: string; password: string; role: string; quotaBytes?: number | null };
       if (Db.prepare("SELECT 1 FROM users WHERE username = ?").get(username)) throw new HttpError(409, "Uživatel s tímhle jménem už existuje.");
-      const result = Db.prepare("INSERT INTO users (username, password_hash, role, created_at) VALUES (?, ?, ?, ?)").run(
+      const result = Db.prepare("INSERT INTO users (username, password_hash, role, created_at, quota_bytes) VALUES (?, ?, ?, ?, ?)").run(
         username,
         await HashPassword(password),
         role,
         Date.now(),
+        quotaBytes ?? null,
       );
       mkdirSync(path.join(GetRootDir(), username), { recursive: true });
       return { id: Number(result.lastInsertRowid) };
@@ -64,12 +82,12 @@ export async function AdminRoutes(app: FastifyInstance) {
     "/admin/users/:id",
     {
       schema: {
-        body: { type: "object", properties: { role: ROLE, newPassword: PASSWORD, currentPassword: { type: "string" } } },
+        body: { type: "object", properties: { role: ROLE, newPassword: PASSWORD, currentPassword: { type: "string" }, quotaBytes: QUOTA } },
       },
     },
     async (request) => {
       const id = Number((request.params as { id: string }).id);
-      const body = request.body as { role?: string; newPassword?: string; currentPassword?: string };
+      const body = request.body as { role?: string; newPassword?: string; currentPassword?: string; quotaBytes?: number | null };
       const target = Db.prepare("SELECT id, role FROM users WHERE id = ?").get(id) as { id: number; role: string } | undefined;
       if (!target) throw new HttpError(404, "Uživatel neexistuje.");
 
@@ -78,6 +96,8 @@ export async function AdminRoutes(app: FastifyInstance) {
         if (target.role === "admin" && AdminCount() <= 1) throw new HttpError(400, "Poslední admin musí zůstat adminem.");
         Db.prepare("UPDATE users SET role = ? WHERE id = ?").run(body.role, id);
       }
+      // `undefined` = neměnit, `null` = zrušit limit
+      if (body.quotaBytes !== undefined) Db.prepare("UPDATE users SET quota_bytes = ? WHERE id = ?").run(body.quotaBytes, id);
       if (body.newPassword) {
         Db.prepare("UPDATE users SET password_hash = ? WHERE id = ?").run(await HashPassword(body.newPassword), id);
         // Po resetu hesla odhlásit všechna zařízení toho účtu.

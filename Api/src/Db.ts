@@ -52,6 +52,10 @@ Db.exec(`
   );
 `);
 
+// Migrace: sloupec přidaný po první verzi. NULL = bez limitu.
+const userColumns = Db.prepare("PRAGMA table_info(users)").all() as { name: string }[];
+if (!userColumns.some((column) => column.name === "quota_bytes")) Db.exec("ALTER TABLE users ADD COLUMN quota_bytes INTEGER");
+
 export function GetSetting(key: string): string | undefined {
   const row = Db.prepare("SELECT value FROM settings WHERE key = ?").get(key) as { value: string } | undefined;
   return row?.value;

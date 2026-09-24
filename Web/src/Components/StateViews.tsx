@@ -15,7 +15,7 @@ export function LoadingRows({ count = 5 }: { count?: number }) {
 
 export function ErrorView({ message, onRetry }: { message: string; onRetry: () => void }) {
   return (
-    <EmptyState className="py-16">
+    <EmptyState className="flex flex-col items-center gap-2 py-16 text-center">
       <Icon name="error" className="text-[48px] text-danger" />
       <p className="font-medium">Nepodařilo se načíst data</p>
       <p className="text-sm text-muted">{message}</p>
@@ -28,7 +28,7 @@ export function ErrorView({ message, onRetry }: { message: string; onRetry: () =
 
 export function EmptyView({ icon, title, children }: { icon: string; title: string; children?: ReactNode }) {
   return (
-    <EmptyState className="py-16">
+    <EmptyState className="flex flex-col items-center gap-2 py-16 text-center">
       <span className="grid size-16 place-items-center rounded-full bg-accent/10">
         <Icon name={icon} className="text-[32px] text-accent" />
       </span>

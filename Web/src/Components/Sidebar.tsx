@@ -40,25 +40,35 @@ function NavLink({ item, onNavigate }: { item: NavItem; onNavigate?: () => void 
   );
 }
 
+interface Storage {
+  total: number;
+  free: number;
+  quota: number | null;
+  used: number | null;
+}
+
+// S kvótou ukazuje vlastní obsazení z limitu, bez ní volné místo na disku.
 function StorageMeter() {
   const { version } = useUploads();
-  const [storage, setStorage] = useState<{ total: number; free: number } | null>(null);
+  const [storage, setStorage] = useState<Storage | null>(null);
 
   useEffect(() => {
-    ApiFetch<{ total: number; free: number }>("/api/storage").then((result) => result.ok && setStorage(result.body));
+    ApiFetch<Storage>("/api/storage").then((result) => result.ok && setStorage(result.body));
   }, [version]);
 
   if (!storage) return null;
-  const used = storage.total - storage.free;
-  const ratio = used / (storage.total || 1);
+  const hasQuota = storage.quota !== null;
+  const max = hasQuota ? (storage.quota as number) : storage.total;
+  const used = hasQuota ? (storage.used ?? 0) : storage.total - storage.free;
+  const ratio = used / (max || 1);
   return (
-    <Meter value={used} maxValue={storage.total} size="sm" color={ratio > 0.95 ? "danger" : ratio > 0.85 ? "warning" : "accent"} className="px-3">
-      <Label className="text-xs text-muted">Místo na disku</Label>
+    <Meter value={Math.min(used, max)} maxValue={max || 1} size="sm" color={ratio > 0.95 ? "danger" : ratio > 0.85 ? "warning" : "accent"} className="px-3">
+      <Label className="text-xs text-muted">{hasQuota ? "Tvoje místo" : "Místo na disku"}</Label>
       <Meter.Track>
         <Meter.Fill />
       </Meter.Track>
       <span className="col-span-2 text-xs text-muted tabular-nums">
-        Volných {FormatBytes(storage.free)} z {FormatBytes(storage.total)}
+        {hasQuota ? `Obsazeno ${FormatBytes(used)} z ${FormatBytes(max)}` : `Volných ${FormatBytes(storage.free)} z ${FormatBytes(storage.total)}`}
       </span>
     </Meter>
   );

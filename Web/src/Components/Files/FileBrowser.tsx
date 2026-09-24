@@ -436,7 +436,7 @@ export function FileBrowser() {
 
       <div className="flex-1">
         {error ? (
-          <EmptyState className="py-16">
+          <EmptyState className="flex flex-col items-center gap-2 py-16 text-center">
             <Icon name="error" className="text-[48px] text-danger" />
             <p className="font-medium">Složku se nepodařilo načíst</p>
             <p className="text-sm text-muted">{error}</p>
@@ -456,7 +456,7 @@ export function FileBrowser() {
             ))}
           </div>
         ) : visible.length === 0 ? (
-          <EmptyState className="py-16">
+          <EmptyState className="flex flex-col items-center gap-2 py-16 text-center">
             <span className="grid size-16 place-items-center rounded-full bg-accent/10">
               <Icon name={filter ? "search_off" : "cloud_upload"} className="text-[32px] text-accent" />
             </span>

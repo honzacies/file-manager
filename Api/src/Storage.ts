@@ -101,6 +101,43 @@ export async function ListDir(abs: string, isRoot: boolean) {
   return entries.filter((e) => e !== null);
 }
 
+// Součet velikostí všech souborů ve složce (rekurzivně).
+// ponytail: prochází disk při každém volání; cache/průběžný součet v DB, až to bude u velkých složek pomalé
+export async function DirSize(abs: string) {
+  const dirents = await fs.readdir(abs, { withFileTypes: true, recursive: true }).catch(() => []);
+  let total = 0;
+  for (const d of dirents) {
+    if (!d.isFile()) continue;
+    const stat = await fs.stat(path.join(d.parentPath, d.name)).catch(() => null);
+    total += stat?.size ?? 0;
+  }
+  return total;
+}
+
+// ---- Kvóty ---------------------------------------------------------------
+
+export function QuotaOf(userId: number) {
+  const row = Db.prepare("SELECT quota_bytes FROM users WHERE id = ?").get(userId) as { quota_bytes: number | null } | undefined;
+  return row?.quota_bytes ?? null;
+}
+
+// Vyhodí 413, když by se `incoming` bajtů do kvóty nevešlo. Kvóta hlídá jen vlastní složku
+// (admin v "Všech souborech" ji obchází) a koš se nepočítá.
+export async function AssertQuota(view: View, userId: number, incoming: number) {
+  if (!view.prefix) return;
+  const quota = QuotaOf(userId);
+  if (quota === null) return;
+  const used = await DirSize(view.base);
+  if (used + incoming > quota) {
+    throw new HttpError(413, `Nedostatek místa. Máš limit ${FormatGb(quota)}, zbývá ${FormatGb(Math.max(0, quota - used))}.`);
+  }
+}
+
+// 1234567890 -> "1,1 GB"
+function FormatGb(bytes: number) {
+  return `${(bytes / 1024 ** 3).toLocaleString("cs-CZ", { maximumFractionDigits: 1 })} GB`;
+}
+
 // ---- Koš ----------------------------------------------------------------
 
 export async function MoveToTrash(abs: string, relToRoot: string) {

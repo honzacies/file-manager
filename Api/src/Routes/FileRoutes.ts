@@ -6,11 +6,14 @@ import { pipeline } from "node:stream/promises";
 import type { FastifyInstance } from "fastify";
 import { RequireUser } from "../Auth.ts";
 import {
+  AssertQuota,
+  DirSize,
   GetView,
   HttpError,
   ListDir,
   MovePath,
   MoveToTrash,
+  QuotaOf,
   Resolve,
   SendFile,
   StatOrThrow,
@@ -67,8 +70,15 @@ export async function FileRoutes(app: FastifyInstance) {
   });
 
   app.get("/storage", async (request) => {
-    const stats = await fs.statfs(GetView(request.user).root);
-    return { total: stats.blocks * stats.bsize, free: stats.bavail * stats.bsize };
+    const view = GetView(request.user);
+    const stats = await fs.statfs(view.root);
+    const quota = QuotaOf(request.user.id);
+    return {
+      total: stats.blocks * stats.bsize,
+      free: stats.bavail * stats.bsize,
+      quota,
+      used: quota === null ? null : await DirSize(view.base),
+    };
   });
 
   app.post(
@@ -101,6 +111,8 @@ export async function FileRoutes(app: FastifyInstance) {
     const query = request.query as PathQueryT;
     const view = GetView(request.user, query.all);
     const { abs } = Resolve(view, query.path);
+    // Předběžná kontrola podle velikosti requestu — ať se velký soubor vůbec nezačne zapisovat.
+    await AssertQuota(view, request.user.id, Number(request.headers["content-length"] ?? 0));
     const file = await request.file();
     if (!file) throw new HttpError(400, "Chybí soubor.");
 
@@ -113,6 +125,8 @@ export async function FileRoutes(app: FastifyInstance) {
     const temp = path.join(targetDir, `${UPLOAD_PREFIX}${randomUUID()}`);
     try {
       await pipeline(file.file, createWriteStream(temp));
+      // Znovu se skutečnou velikostí (request bez Content-Length, souběžné uploady).
+      await AssertQuota(view, request.user.id, 0);
     } catch (error) {
       await fs.rm(temp, { force: true });
       throw error;

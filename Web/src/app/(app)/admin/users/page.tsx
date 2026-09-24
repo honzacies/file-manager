@@ -10,19 +10,27 @@ import { PageHeader } from "@/Components/PageHeader";
 import { Panel } from "@/Components/Panel";
 import { PasswordField } from "@/Components/PasswordField";
 import { useUser } from "@/Components/Session";
-import { UserAvatar } from "@/Components/UserAvatar";
+import { QuotaField } from "@/Components/QuotaField";
 import { ErrorView, LoadingRows } from "@/Components/StateViews";
+import { UserAvatar } from "@/Components/UserAvatar";
 import { ApiFetch, ErrorText } from "@/lib/api";
-import { FormatDate } from "@/lib/format";
+import { FormatBytes, FormatDate } from "@/lib/format";
 
 interface UserRow {
   id: number;
   username: string;
   role: "admin" | "user";
   createdAt: number;
+  quotaBytes: number | null;
+  usedBytes: number;
 }
 
-type DialogState = { kind: "create" } | { kind: "password"; user: UserRow } | { kind: "delete"; user: UserRow } | null;
+type DialogState =
+  | { kind: "create" }
+  | { kind: "password"; user: UserRow }
+  | { kind: "delete"; user: UserRow }
+  | { kind: "quota"; user: UserRow }
+  | null;
 
 function RoleSelect({ value, onChange }: { value: Key | null; onChange: (value: Key | null) => void }) {
   return (
@@ -54,6 +62,7 @@ function UserDialog({ state, onClose, onDone }: { state: DialogState; onClose: (
   const [password, setPassword] = useState("");
   const [role, setRole] = useState<Key | null>("user");
   const [ownPassword, setOwnPassword] = useState("");
+  const [quota, setQuota] = useState<number | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [pending, setPending] = useState(false);
 
@@ -62,6 +71,7 @@ function UserDialog({ state, onClose, onDone }: { state: DialogState; onClose: (
     setPassword("");
     setRole("user");
     setOwnPassword("");
+    setQuota(state?.kind === "quota" ? state.user.quotaBytes : null);
     setError(null);
   }, [state]);
 
@@ -71,14 +81,16 @@ function UserDialog({ state, onClose, onDone }: { state: DialogState; onClose: (
   async function Submit(event: React.FormEvent) {
     event.preventDefault();
     if (!state) return;
-    if (state.kind !== "delete" && password.length < 8) return setError("Heslo musí mít aspoň 8 znaků.");
+    if ((state.kind === "create" || state.kind === "password") && password.length < 8) return setError("Heslo musí mít aspoň 8 znaků.");
     setPending(true);
     const result =
       state.kind === "create"
-        ? await ApiFetch("/api/admin/users", "POST", { username: username.trim(), password, role })
+        ? await ApiFetch("/api/admin/users", "POST", { username: username.trim(), password, role, quotaBytes: quota })
         : state.kind === "password"
           ? await ApiFetch(`/api/admin/users/${state.user.id}`, "PATCH", { newPassword: password, currentPassword: ownPassword })
-          : await ApiFetch(`/api/admin/users/${state.user.id}`, "DELETE", { currentPassword: ownPassword });
+          : state.kind === "quota"
+            ? await ApiFetch(`/api/admin/users/${state.user.id}`, "PATCH", { quotaBytes: quota })
+            : await ApiFetch(`/api/admin/users/${state.user.id}`, "DELETE", { currentPassword: ownPassword });
     setPending(false);
     if (!result.ok) {
       const invalidUsername = result.status === 400 && state.kind === "create";
@@ -89,7 +101,9 @@ function UserDialog({ state, onClose, onDone }: { state: DialogState; onClose: (
         ? `Uživatel ${username.trim()} založen`
         : state.kind === "password"
           ? `Heslo pro ${target?.username} změněno`
-          : `Účet ${target?.username} smazán`,
+          : state.kind === "quota"
+            ? `Kvóta pro ${target?.username} ${quota === null ? "zrušena" : `nastavena na ${FormatBytes(quota)}`}`
+            : `Účet ${target?.username} smazán`,
     );
   }
 
@@ -97,6 +111,7 @@ function UserDialog({ state, onClose, onDone }: { state: DialogState; onClose: (
     create: "Nový uživatel",
     password: `Nové heslo pro ${target?.username}`,
     delete: `Smazat účet ${target?.username}?`,
+    quota: `Kvóta pro ${target?.username}`,
   };
 
   return (
@@ -111,6 +126,13 @@ function UserDialog({ state, onClose, onDone }: { state: DialogState; onClose: (
             </TextField>
             <PasswordField label="Heslo" value={password} onChange={setPassword} autoComplete="new-password" description="Aspoň 8 znaků." />
             <RoleSelect value={role} onChange={setRole} />
+            <QuotaField bytes={quota} onChange={setQuota} />
+          </>
+        )}
+        {state.kind === "quota" && (
+          <>
+            <p className="text-sm text-muted">Teď má obsazeno {FormatBytes(target?.usedBytes ?? 0)}. Nižší limit nic nesmaže, jen zablokuje další nahrávání.</p>
+            <QuotaField bytes={quota} onChange={setQuota} autoFocus />
           </>
         )}
         {state.kind === "password" && (
@@ -122,7 +144,7 @@ function UserDialog({ state, onClose, onDone }: { state: DialogState; onClose: (
             <code>{target?.username}</code>, admin je najde ve Všech souborech.
           </p>
         )}
-        {state.kind !== "create" && (
+        {(state.kind === "password" || state.kind === "delete") && (
           <PasswordField
             label="Tvoje heslo pro potvrzení"
             value={ownPassword}
@@ -137,7 +159,7 @@ function UserDialog({ state, onClose, onDone }: { state: DialogState; onClose: (
             Zrušit
           </Button>
           <Button type="submit" variant={state.kind === "delete" ? "danger" : "primary"} isPending={pending}>
-            {state.kind === "create" ? "Založit" : state.kind === "password" ? "Změnit heslo" : "Smazat účet"}
+            {{ create: "Založit", password: "Změnit heslo", quota: "Uložit", delete: "Smazat účet" }[state.kind]}
           </Button>
         </div>
       </Form>
@@ -194,7 +216,12 @@ export default function UsersPage() {
                       {user.username}
                       {user.id === me.id && <span className="text-muted"> (ty)</span>}
                     </p>
-                    <p className="text-xs text-muted">Založen {FormatDate(user.createdAt)}</p>
+                    <p className="text-xs text-muted tabular-nums">
+                      {user.quotaBytes === null
+                        ? `${FormatBytes(user.usedBytes)} · bez limitu`
+                        : `${FormatBytes(user.usedBytes)} z ${FormatBytes(user.quotaBytes)}`}
+                      {" · "}založen {FormatDate(user.createdAt)}
+                    </p>
                   </div>
                   <Chip size="sm" variant="soft" color={user.role === "admin" ? "accent" : "default"}>
                     {user.role === "admin" ? "Administrátor" : "Uživatel"}
@@ -204,9 +231,10 @@ export default function UsersPage() {
                     actions={[
                       { id: "role", label: user.role === "admin" ? "Odebrat práva admina" : "Udělat administrátorem", icon: "shield_person" },
                       { id: "password", label: "Nastavit nové heslo", icon: "key" },
+                      { id: "quota", label: "Nastavit kvótu", icon: "data_usage" },
                       ...(user.id === me.id ? [] : [{ id: "delete", label: "Smazat účet", icon: "person_remove", danger: true, separated: true }]),
                     ]}
-                    onAction={(id) => (id === "role" ? ToggleRole(user) : setDialog({ kind: id as "password" | "delete", user }))}
+                    onAction={(id) => (id === "role" ? ToggleRole(user) : setDialog({ kind: id as "password" | "delete" | "quota", user }))}
                   />
                 </li>
               ))}
