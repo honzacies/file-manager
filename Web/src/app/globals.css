@@ -1,0 +1,92 @@
+@import "tailwindcss";
+@import "@heroui/styles";
+@import "material-symbols/outlined.css";
+
+/*
+ * HeroUI téma — stejná struktura jako Tool Suite, seed hue 25 (červená).
+ * Neutrální plochy mají jen nádech odstínu, červená je jen akcent.
+ */
+
+:root,
+.light,
+[data-theme="light"] {
+  --accent: oklch(56% 0.215 25);
+  --accent-foreground: oklch(99.11% 0 0);
+  --background: oklch(97.6% 0.003 25);
+  --border: oklch(90.5% 0.004 25);
+  --danger: oklch(55% 0.22 22);
+  --danger-foreground: oklch(99.11% 0 0);
+  --default: oklch(94.5% 0.004 25);
+  --default-foreground: oklch(21% 0.006 25);
+  --field-background: oklch(100% 0 0);
+  --field-border: oklch(90% 0.004 25);
+  --field-foreground: oklch(21% 0.004 25);
+  --field-placeholder: oklch(55% 0.006 25);
+  --focus: oklch(56% 0.215 25);
+  --foreground: oklch(21% 0.004 25);
+  --muted: oklch(52% 0.008 25);
+  --overlay: oklch(100% 0 0);
+  --overlay-foreground: oklch(21% 0.004 25);
+  --scrollbar: oklch(86% 0.004 25);
+  --segment: oklch(100% 0 0);
+  --segment-foreground: oklch(21% 0.004 25);
+  --separator: oklch(92% 0.004 25);
+  --success: oklch(70% 0.17 150);
+  --success-foreground: oklch(21% 0.006 150);
+  --surface: oklch(100% 0 0);
+  --surface-foreground: oklch(21% 0.004 25);
+  --surface-secondary: oklch(96% 0.004 25);
+  --surface-secondary-foreground: oklch(21% 0.004 25);
+  --surface-tertiary: oklch(94.5% 0.005 25);
+  --surface-tertiary-foreground: oklch(21% 0.004 25);
+  --warning: oklch(78% 0.16 75);
+  --warning-foreground: oklch(21% 0.006 75);
+
+  --radius: 0.5rem;
+  --field-radius: 0.75rem;
+  --field-border-width: 1px;
+
+  --font-sans: var(--font-inter);
+}
+
+.dark,
+[data-theme="dark"] {
+  color-scheme: dark;
+  --accent: oklch(64% 0.2 25);
+  --accent-foreground: oklch(99% 0 0);
+  --background: oklch(14% 0.004 25);
+  --border: oklch(28% 0.006 25);
+  --danger: oklch(62% 0.2 22);
+  --danger-foreground: oklch(99% 0 0);
+  --default: oklch(26% 0.006 25);
+  --default-foreground: oklch(98% 0.002 25);
+  --field-background: oklch(16% 0.005 25);
+  --field-border: oklch(30% 0.006 25);
+  --field-foreground: oklch(98% 0.002 25);
+  --field-placeholder: oklch(66% 0.006 25);
+  --focus: oklch(64% 0.2 25);
+  --foreground: oklch(98% 0.002 25);
+  --muted: oklch(70% 0.006 25);
+  --overlay: oklch(21% 0.006 25);
+  --overlay-foreground: oklch(98% 0.002 25);
+  --scrollbar: oklch(40% 0.006 25);
+  --segment: oklch(36% 0.006 25);
+  --segment-foreground: oklch(98% 0.002 25);
+  --separator: oklch(25% 0.006 25);
+  --success: oklch(72% 0.17 150);
+  --success-foreground: oklch(21% 0.006 150);
+  --surface: oklch(19% 0.005 25);
+  --surface-foreground: oklch(98% 0.002 25);
+  --surface-secondary: oklch(22.5% 0.006 25);
+  --surface-secondary-foreground: oklch(98% 0.002 25);
+  --surface-tertiary: oklch(17% 0.005 25);
+  --surface-tertiary-foreground: oklch(98% 0.002 25);
+  --warning: oklch(80% 0.14 78);
+  --warning-foreground: oklch(21% 0.006 78);
+}
+
+body {
+  background: var(--background);
+  color: var(--foreground);
+  overflow-x: hidden;
+}

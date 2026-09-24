@@ -1,0 +1,53 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "api",
+      "runtimeExecutable": "node",
+      "runtimeArgs": [
+        "--watch",
+        "--env-file-if-exists=.env",
+        "src/Server.ts"
+      ],
+      "cwd": "Api",
+      "env": {
+        "PORT": "8181",
+        "DATA_DIR": "./.dev/data",
+        "DEFAULT_ROOT_DIR": "./.dev/cloud"
+      },
+      "port": 8181
+    },
+    {
+      "name": "web",
+      "runtimeExecutable": "node",
+      "runtimeArgs": [
+        "node_modules/next/dist/bin/next",
+        "dev",
+        "-p",
+        "3217"
+      ],
+      "cwd": "Web",
+      "env": {
+        "API_URL": "http://127.0.0.1:8181"
+      },
+      "port": 3217
+    },
+    {
+      "name": "prod",
+      "runtimeExecutable": "node",
+      "runtimeArgs": [
+        "--disable-warning=ExperimentalWarning",
+        "src/Server.ts"
+      ],
+      "cwd": "Api",
+      "env": {
+        "NODE_ENV": "production",
+        "PORT": "8282",
+        "DATA_DIR": "./.dev/data",
+        "DEFAULT_ROOT_DIR": "./.dev/cloud",
+        "WEB_DIR": "../Web/out"
+      },
+      "port": 8282
+    }
+  ]
+}
