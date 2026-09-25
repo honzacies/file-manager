@@ -91,7 +91,10 @@ function useItemProps(entry: Entry, handlers: ItemHandlers) {
       // Na dotyku se neoznačuje, ale rovnou otevírá (dvojklik prstem je nepohodlný).
       // Veřejné sdílení nemá výběr — klik rovnou otevírá.
       if (handlers.readOnly || ((event.nativeEvent as PointerEvent).pointerType === "touch" && !handlers.selected.size)) return handlers.onOpen(entry);
-      handlers.onSelect(entry.name, ClickMode(event));
+      // Režim výběru: když už je něco označené, obyčejný klik výběr nepřepíše, jen položku
+      // přidá/odebere — výběr se tak nedá omylem "odkliknout".
+      const mode = ClickMode(event);
+      handlers.onSelect(entry.name, mode === "replace" && handlers.selected.size ? "toggle" : mode);
     },
     onDoubleClick: () => handlers.onOpen(entry),
     onContextMenu: (event: React.MouseEvent) => handlers.onContextMenu(entry, event),

@@ -87,6 +87,7 @@ export function FileBrowser() {
   const [dropActive, setDropActive] = useState(false);
   const [focusSearch, setFocusSearch] = useState(false);
   const dragDepth = useRef(0);
+  const lastEmptyTap = useRef(-Infinity);
   const fileInput = useRef<HTMLInputElement>(null);
   const folderInput = useRef<HTMLInputElement>(null);
   const searchInput = useRef<HTMLInputElement>(null);
@@ -446,7 +447,9 @@ export function FileBrowser() {
     onContextMenu: (entry, event) => {
       event.preventDefault();
       event.stopPropagation();
-      if (!selected.has(entry.name)) {
+      // Bez výběru položku označit (vidět, na co se menu vztahuje). Existující výběr nechat být —
+      // menu pak platí jen pro tuhle položku (menuTargets).
+      if (!selected.size) {
         setSelected(new Set([entry.name]));
         setAnchor(entry.name);
       }
@@ -487,8 +490,12 @@ export function FileBrowser() {
         setMenu({ x: event.clientX, y: event.clientY, entry: null });
       }}
       onClick={(event) => {
-        // klik do prázdna zruší výběr
-        if (!(event.target as HTMLElement).closest("[role=option], button, input, label, a, [role=menu]")) setSelected(new Set());
+        if ((event.target as HTMLElement).closest("[role=option], button, input, label, a, [role=menu]")) return;
+        // Výběr se ruší jen úmyslně: Ctrl/Cmd+klik do prázdna, na dotyku dvojité ťuknutí (+ Esc, ✕ v liště).
+        const touch = (event.nativeEvent as PointerEvent).pointerType === "touch";
+        if (event.ctrlKey || event.metaKey) setSelected(new Set());
+        else if (touch && event.timeStamp - lastEmptyTap.current < 350) setSelected(new Set());
+        if (touch) lastEmptyTap.current = event.timeStamp;
       }}
     >
       <PageHeader
@@ -572,7 +579,10 @@ export function FileBrowser() {
       <div className="flex min-h-10 flex-wrap items-center gap-3">
         {selected.size > 0 ? (
           <div className="flex min-h-10 w-full flex-wrap items-center gap-1 rounded-2xl bg-accent/10 py-1 pr-2 pl-4" role="toolbar" aria-label="Akce s výběrem">
-            <span className="mr-auto text-sm font-medium text-accent">Označeno: {selected.size}</span>
+            <span className="mr-auto text-sm font-medium text-accent">
+              Označeno: {selected.size}
+              <span className="hidden font-normal text-muted lg:inline"> · klik přidá/odebere, Esc nebo ✕ zruší výběr</span>
+            </span>
             <Button size="sm" variant="tertiary" onPress={() => Download(selectedEntries)}>
               <Icon name={selectedEntries.length === 1 && !selectedEntries[0].isDir ? "download" : "folder_zip"} className="text-[18px]" />
               <span className="hidden sm:inline">Stáhnout</span>
@@ -599,7 +609,7 @@ export function FileBrowser() {
                 </Button>
               </>
             )}
-            <Button size="sm" isIconOnly variant="tertiary" aria-label="Zrušit výběr" onPress={() => setSelected(new Set())}>
+            <Button size="sm" isIconOnly variant="tertiary" aria-label="Zrušit výběr (Esc)" onPress={() => setSelected(new Set())}>
               <Icon name="close" className="text-[18px]" />
             </Button>
           </div>
