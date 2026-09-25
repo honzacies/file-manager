@@ -5,6 +5,7 @@ import path from "node:path";
 import { pipeline } from "node:stream/promises";
 import type { FastifyInstance } from "fastify";
 import { RequireUser } from "../Auth.ts";
+import { PeopleByUsername } from "../People.ts";
 import {
   AssertQuota,
   AssertWritable,
@@ -67,7 +68,8 @@ export async function FileRoutes(app: FastifyInstance) {
     const view = ViewFor(request, query);
     const { abs, rel, relToRoot } = Resolve(view, query.path);
     if (!(await StatOrThrow(abs)).isDirectory()) throw new HttpError(400, "Tohle není složka.");
-    return { path: rel, readOnly: view.readOnly, entries: await ListDir(abs, abs === view.root, relToRoot, request.user.id) };
+    const entries = await ListDir(abs, abs === view.root, relToRoot, request.user.id);
+    return { path: rel, readOnly: view.readOnly, entries, people: PeopleByUsername(entries.map((entry) => entry.owner ?? "")) };
   });
 
   app.get("/files/download", { schema: { querystring: PathQuery } }, async (request, reply) => {

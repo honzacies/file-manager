@@ -1,6 +1,6 @@
 "use client";
 
-import { Button, Dropdown, EmptyState, Label, SearchField, Skeleton, ToggleButton, ToggleButtonGroup, toast } from "@heroui/react";
+import { Button, Dropdown, EmptyState, Kbd, Label, SearchField, Skeleton, ToggleButton, ToggleButtonGroup, toast } from "@heroui/react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { ApiFetch, ErrorText, Query } from "@/lib/api";
@@ -12,6 +12,7 @@ import { useOffline } from "../Offline";
 import { PageHeader } from "../PageHeader";
 import { useUser } from "../Session";
 import { useUploads } from "../Uploads";
+import type { Person } from "../UserAvatar";
 import { type Action, ContextMenu } from "./ActionMenu";
 import { DetailsDialog } from "./DetailsDialog";
 import { DRAG_TYPE, FileItems, type ItemHandlers, type Sort, SortEntries } from "./FileItems";
@@ -38,7 +39,7 @@ const VIEW_KEY = "cloud.view";
 interface IncomingShare {
   id: number;
   name: string;
-  owner: string;
+  owner: Person;
   canWrite: boolean;
 }
 
@@ -67,6 +68,8 @@ export function FileBrowser() {
   const offline = useOffline();
 
   const [entries, setEntries] = useState<Entry[] | null>(null);
+  // login -> jméno a avatar vlastníků z odpovědi API
+  const [people, setPeople] = useState<Record<string, Person>>({});
   const [truncated, setTruncated] = useState(false);
   const [readOnly, setReadOnly] = useState(false);
   const [shareInfo, setShareInfo] = useState<IncomingShare | null>(null);
@@ -116,11 +119,12 @@ export function FileBrowser() {
   useEffect(() => {
     let cancelled = false;
     const url = q ? `/api/files/search${Query({ path, q, all, share })}` : `/api/files${Query({ path, all, share })}`;
-    ApiFetch<{ entries: Entry[]; readOnly: boolean; truncated?: boolean }>(url).then((result) => {
+    ApiFetch<{ entries: Entry[]; readOnly: boolean; truncated?: boolean; people: Record<string, Person> }>(url).then((result) => {
       if (cancelled) return;
       if (!result.ok) return setError(ErrorText(result));
       setError(null);
       setEntries(result.body.entries);
+      setPeople(result.body.people ?? {});
       setReadOnly(result.body.readOnly);
       setTruncated(!!result.body.truncated);
       // Po obnovení nechat označené jen to, co ještě existuje.
@@ -453,6 +457,7 @@ export function FileBrowser() {
     onDropInto: (folder, names) => MoveInto(JoinPath(path, folder), names),
     thumbUrl: (entry) => `${FileUrl(entry, true)}&thumb=true`,
     isOffline: (entry) => !entry.isDir && offline.IsOffline(FileUrl(entry, false)),
+    ownerOf: (entry) => (entry.owner ? people[entry.owner] : null),
     readOnly,
   };
 
@@ -460,7 +465,7 @@ export function FileBrowser() {
   const menuTargets = menu?.entry ? (selected.has(menu.entry.name) ? selectedEntries : [menu.entry]) : [];
   const rootTitle = share ? (shareInfo?.name ?? "Sdílená složka") : all ? "Všechny soubory" : "Moje soubory";
   const description = share
-    ? shareInfo && `Sdílí ${shareInfo.owner} · ${readOnly ? "jen pro čtení" : "můžeš upravovat"}`
+    ? shareInfo && `Sdílí ${shareInfo.owner.name} · ${readOnly ? "jen pro čtení" : "můžeš upravovat"}`
     : all
       ? "Celý kořen cloudu včetně složek všech uživatelů."
       : undefined;
@@ -518,6 +523,28 @@ export function FileBrowser() {
           )
         }
       />
+
+      <SearchField
+        aria-label="Hledat v této složce, Enter hledá i v podsložkách"
+        value={filter}
+        onChange={setFilter}
+        // Enter = hledat i v podsložkách, psaní = živý filtr aktuální složky
+        onSubmit={(value) => value.trim() && Navigate(path, value.trim())}
+        onClear={() => q && Navigate(path)}
+        className="w-full max-w-2xl"
+      >
+        <SearchField.Group className="h-12 rounded-full! px-2 shadow-sm">
+          <SearchField.SearchIcon className="ml-1" />
+          <SearchField.Input ref={searchInput} placeholder={`Hledat v „${folderName}“`} className="text-base" />
+          {/* nápověda jen při psaní — Enter spustí hledání i v podsložkách */}
+          {filter.trim() && filter !== q && (
+            <Kbd className="hidden shrink-0 sm:inline-flex" variant="light">
+              <Kbd.Content>↵ i v podsložkách</Kbd.Content>
+            </Kbd>
+          )}
+          <SearchField.ClearButton />
+        </SearchField.Group>
+      </SearchField>
 
       <input
         ref={fileInput}
@@ -577,24 +604,9 @@ export function FileBrowser() {
           </div>
         ) : (
           <>
-            <div className="min-w-0 basis-full sm:flex-1 sm:basis-auto">
+            <div className="min-w-0 flex-1">
               <PathBreadcrumbs path={path} rootLabel={rootTitle} onNavigate={(next) => Navigate(next)} />
             </div>
-            <SearchField
-              aria-label="Hledat v této složce"
-              value={filter}
-              onChange={setFilter}
-              // Enter = hledat i v podsložkách, psaní = živý filtr aktuální složky
-              onSubmit={(value) => value.trim() && Navigate(path, value.trim())}
-              onClear={() => q && Navigate(path)}
-              className="min-w-0 flex-1 sm:w-64 sm:flex-none"
-            >
-              <SearchField.Group>
-                <SearchField.SearchIcon />
-                <SearchField.Input ref={searchInput} placeholder="Hledat (Enter = i v podsložkách)" />
-                <SearchField.ClearButton />
-              </SearchField.Group>
-            </SearchField>
             <ToggleButtonGroup
               aria-label="Zobrazení"
               selectionMode="single"

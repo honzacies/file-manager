@@ -8,9 +8,11 @@ import { Icon } from "@/Components/Icon";
 import { PageHeader } from "@/Components/PageHeader";
 import { Panel } from "@/Components/Panel";
 import { EmptyView, ErrorView, LoadingRows } from "@/Components/StateViews";
+import { type Person, PersonLabel } from "@/Components/UserAvatar";
 import { ApiFetch, ErrorText } from "@/lib/api";
 import { CopyText, ShareUrl } from "@/lib/clipboard";
 import { FormatDate } from "@/lib/format";
+import { ListPanel } from "@/Components/ListPanel";
 
 interface LinkShare {
   token: string;
@@ -25,7 +27,7 @@ interface UserShare {
   id: number;
   name: string;
   path: string;
-  recipient: string;
+  recipient: Person;
   isDir: boolean;
   canWrite: boolean;
   missing: boolean;
@@ -74,7 +76,7 @@ export default function SharesPage() {
         : await ApiFetch(`/api/user-shares/${revoke.share.id}`, "DELETE");
     setPending(false);
     setRevoke(null);
-    if (result.ok) toast.success(revoke.kind === "link" ? "Odkaz zrušen" : `${revoke.share.recipient} už k „${revoke.share.name}“ nemá přístup`);
+    if (result.ok) toast.success(revoke.kind === "link" ? "Odkaz zrušen" : `${revoke.share.recipient.name} už k „${revoke.share.name}“ nemá přístup`);
     else toast.danger(ErrorText(result));
     Load();
   }
@@ -96,19 +98,19 @@ export default function SharesPage() {
             </p>
           </Panel>
         ) : (
-          <Panel className="p-2!">
-            <ul className="flex flex-col divide-y divide-separator">
+          <ListPanel>
               {users.map((share) => (
                 <li key={share.id} className="flex flex-wrap items-center gap-3 px-3 py-2.5 sm:flex-nowrap">
                   <FileIcon name={share.name} isDir={share.isDir} className="shrink-0 text-[24px]" />
                   <div className="min-w-0 flex-1">
                     <p className="truncate text-sm font-medium">
-                      {share.name} <span className="font-normal text-muted">→ {share.recipient}</span>
+                      {share.name}
                     </p>
                     <p className="truncate text-xs text-muted">
                       /{share.path} · od {FormatDate(share.createdAt)}
                     </p>
                   </div>
+                  <PersonLabel person={share.recipient} className="w-full text-sm sm:w-44" />
                   <Chip size="sm" variant="soft" color={share.missing ? "danger" : share.canWrite ? "accent" : "default"}>
                     {share.missing ? "V koši" : share.canWrite ? "Může upravovat" : "Může zobrazit"}
                   </Chip>
@@ -116,7 +118,7 @@ export default function SharesPage() {
                     size="sm"
                     isIconOnly
                     variant="ghost"
-                    aria-label={`Zrušit sdílení ${share.name} s ${share.recipient}`}
+                    aria-label={`Zrušit sdílení ${share.name} s ${share.recipient.name}`}
                     onPress={() => setRevoke({ kind: "user", share })}
                     className="text-danger!"
                   >
@@ -124,8 +126,7 @@ export default function SharesPage() {
                   </Button>
                 </li>
               ))}
-            </ul>
-          </Panel>
+            </ListPanel>
         )}
       </section>
 
@@ -138,8 +139,7 @@ export default function SharesPage() {
             V souborech klikni pravým tlačítkem na soubor nebo složku a vyber <b>Sdílet odkazem</b>.
           </EmptyView>
         ) : (
-          <Panel className="p-2!">
-            <ul className="flex flex-col divide-y divide-separator">
+          <ListPanel>
               {links.map((share) => {
                 const expired = share.expiresAt !== null && share.expiresAt < Date.now();
                 return (
@@ -173,8 +173,7 @@ export default function SharesPage() {
                   </li>
                 );
               })}
-            </ul>
-          </Panel>
+            </ListPanel>
         )}
       </section>
 
@@ -182,7 +181,7 @@ export default function SharesPage() {
         isOpen={!!revoke}
         onOpenChange={(open) => !open && setRevoke(null)}
         heading={
-          revoke?.kind === "user" ? `Přestat sdílet „${revoke.share.name}“ s ${revoke.share.recipient}?` : `Zrušit odkaz na „${revoke?.share.name ?? ""}“?`
+          revoke?.kind === "user" ? `Přestat sdílet „${revoke.share.name}“ s ${revoke.share.recipient.name}?` : `Zrušit odkaz na „${revoke?.share.name ?? ""}“?`
         }
         confirmLabel={revoke?.kind === "user" ? "Přestat sdílet" : "Zrušit odkaz"}
         isPending={pending}

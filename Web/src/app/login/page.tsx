@@ -6,11 +6,7 @@ import { Suspense, useState } from "react";
 import { Brand } from "@/Components/Brand";
 import { Panel } from "@/Components/Panel";
 import { ApiFetch, ErrorText } from "@/lib/api";
-
-// `?from=` smí být jen cesta v téhle appce — `//evil.com` by vedlo na cizí web.
-function SafeRedirect(target: string | null) {
-  return target && /^\/(?![/\\])/.test(target) ? target : "/files/";
-}
+import { SafeRedirect } from "@/lib/safeRedirect";
 
 function LoginForm() {
   const router = useRouter();
@@ -30,7 +26,7 @@ function LoginForm() {
       setPending(false);
       return;
     }
-    router.replace(SafeRedirect(searchParams.get("from")));
+    router.replace(SafeRedirect(searchParams.get("from"), window.location.origin));
   }
 
   return (

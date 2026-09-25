@@ -5,17 +5,11 @@ import { useCallback, useEffect, useState } from "react";
 import { ApiFetch, ErrorText, Query } from "@/lib/api";
 import { AppDialog } from "../AppDialog";
 import { Icon } from "../Icon";
-import { UserAvatar } from "../UserAvatar";
-
-interface Person {
-  id: number;
-  username: string;
-}
+import { type Person, UserAvatar } from "../UserAvatar";
 
 interface Recipient {
   id: number;
-  recipientId: number;
-  username: string;
+  recipient: Person;
   canWrite: boolean;
 }
 
@@ -108,7 +102,7 @@ export function UserShareDialog({
     });
     setPending(false);
     if (!result.ok) return toast.danger(ErrorText(result));
-    const name = people?.find((person) => person.id === Number(selectedUser))?.username;
+    const name = people?.find((person) => person.id === Number(selectedUser))?.name;
     toast.success(`Sdíleno s ${name}. Přijde mu notifikace.`);
     setSelectedUser(null);
     Load();
@@ -122,13 +116,13 @@ export function UserShareDialog({
 
   async function Remove(recipient: Recipient) {
     const result = await ApiFetch(`/api/user-shares/${recipient.id}`, "DELETE");
-    if (result.ok) toast.success(`${recipient.username} už k „${target?.name}“ nemá přístup`);
+    if (result.ok) toast.success(`${recipient.recipient.name} už k „${target?.name}“ nemá přístup`);
     else toast.danger(ErrorText(result));
     Load();
   }
 
   // V nabídce jen lidé, se kterými ještě sdíleno není.
-  const available = (people ?? []).filter((person) => !recipients?.some((recipient) => recipient.recipientId === person.id));
+  const available = (people ?? []).filter((person) => !recipients?.some((recipient) => recipient.recipient.id === person.id));
 
   return (
     <AppDialog
@@ -151,8 +145,12 @@ export function UserShareDialog({
               <Select.Popover>
                 <ListBox>
                   {available.map((person) => (
-                    <ListBox.Item key={person.id} id={person.id} textValue={person.username}>
-                      {person.username}
+                    <ListBox.Item key={person.id} id={person.id} textValue={`${person.name} ${person.username}`}>
+                      <UserAvatar person={person} className="size-6! text-[10px]!" />
+                      <span className="flex flex-col">
+                        <span>{person.name}</span>
+                        {person.name !== person.username && <span className="text-xs text-muted">{person.username}</span>}
+                      </span>
                       <ListBox.ItemIndicator />
                     </ListBox.Item>
                   ))}
@@ -186,19 +184,21 @@ export function UserShareDialog({
             <ul className="flex flex-col divide-y divide-separator rounded-xl border border-border">
               {recipients.map((recipient) => (
                 <li key={recipient.id} className="flex items-center gap-3 px-3 py-2">
-                  <UserAvatar username={recipient.username} />
-                  <span className="min-w-0 flex-1 truncate text-sm">{recipient.username}</span>
+                  <UserAvatar person={recipient.recipient} />
+                  <span className="min-w-0 flex-1 truncate text-sm text-foreground" title={recipient.recipient.username}>
+                    {recipient.recipient.name}
+                  </span>
                   {target?.isDir ? (
                     <PermissionSelect
                       hideLabel
-                      label={`Oprávnění pro ${recipient.username}`}
+                      label={`Oprávnění pro ${recipient.recipient.name}`}
                       value={recipient.canWrite ? "write" : "read"}
                       onChange={(value) => ChangePermission(recipient, value)}
                     />
                   ) : (
                     <span className="text-xs text-muted">Může zobrazit</span>
                   )}
-                  <Button isIconOnly size="sm" variant="ghost" aria-label={`Odebrat ${recipient.username}`} onPress={() => Remove(recipient)} className="text-danger!">
+                  <Button isIconOnly size="sm" variant="ghost" aria-label={`Odebrat ${recipient.recipient.name}`} onPress={() => Remove(recipient)} className="text-danger!">
                     <Icon name="person_remove" className="text-[18px]" />
                   </Button>
                 </li>

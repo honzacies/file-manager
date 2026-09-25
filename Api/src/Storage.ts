@@ -86,7 +86,8 @@ export interface ScopeT {
 export const ViewFor = (request: FastifyRequest, scope: ScopeT) => GetView(request.user, { all: scope.all, share: scope.share });
 
 // Absolutní cesta -> relativní ke kořeni cloudu ("/cloud/alice/Fotky" -> "alice/Fotky")
-export const RelToRoot = (view: View, abs: string) => path.relative(view.root, abs).split(path.sep).join("/");
+export const RelFromRoot = (root: string, abs: string) => path.relative(root, abs).split(path.sep).join("/");
+export const RelToRoot = (view: View, abs: string) => RelFromRoot(view.root, abs);
 
 export function AssertWritable(view: View) {
   if (view.readOnly) throw new HttpError(403, "Tohle sdílení je jen pro čtení.");
@@ -106,7 +107,8 @@ export function Resolve(view: Pick<View, "base" | "prefix">, clientPath = "") {
 
 export function ValidName(name: unknown): string {
   const value = typeof name === "string" ? name.trim() : "";
-  if (!value || value === "." || value === ".." || value.length > 255 || /[/\\\0]/.test(value) || value.startsWith(UPLOAD_PREFIX)) {
+  // limit 255 bajtů (ne znaků) — tolik unese název souboru na ext4; "ž" jsou 2 bajty
+  if (!value || value === "." || value === ".." || Buffer.byteLength(value) > 255 || /[/\\\0]/.test(value) || value.startsWith(UPLOAD_PREFIX)) {
     throw new HttpError(400, "Neplatný název.");
   }
   return value;
@@ -146,10 +148,12 @@ export interface Entry {
   modified: number;
   color?: string;
   starred?: boolean;
+  // login vlastníka = první část cesty od kořene (u složek mimo účty jejich název)
+  owner?: string;
 }
 
 // `dirRel` = cesta složky relativně ke kořeni; s ní se k položkám doplní barva a hvězdička uživatele.
-export async function ListDir(abs: string, isRoot: boolean, dirRel?: string, userId?: number) {
+export async function ListDir(abs: string, isRoot: boolean, dirRel?: string, userId?: number): Promise<Entry[]> {
   const dirents = await fs.readdir(abs, { withFileTypes: true });
   const entries = await Promise.all(
     dirents
@@ -167,8 +171,8 @@ export async function ListDir(abs: string, isRoot: boolean, dirRel?: string, use
 }
 
 // Doplní barvu složky a hvězdičku. `relOf` vrátí cestu položky relativně ke kořeni.
-export function Decorate<T extends Entry>(entries: T[], relOf: (entry: T) => string, userId?: number): T[] {
-  if (!entries.length) return entries;
+export function Decorate<T extends Entry>(entries: T[], relOf: (entry: T) => string, userId?: number): (T & { owner: string })[] {
+  if (!entries.length) return [];
   const rels = JSON.stringify(entries.map(relOf));
   const colors = new Map(
     (Db.prepare("SELECT path, color FROM folder_colors WHERE path IN (SELECT value FROM json_each(?))").all(rels) as { path: string; color: string }[]).map(
@@ -184,7 +188,7 @@ export function Decorate<T extends Entry>(entries: T[], relOf: (entry: T) => str
   );
   return entries.map((entry) => {
     const rel = relOf(entry);
-    return { ...entry, ...(colors.has(rel) && { color: colors.get(rel) }), ...(stars.has(rel) && { starred: true }) };
+    return { ...entry, owner: rel.split("/")[0], ...(colors.has(rel) && { color: colors.get(rel) }), ...(stars.has(rel) && { starred: true }) };
   });
 }
 

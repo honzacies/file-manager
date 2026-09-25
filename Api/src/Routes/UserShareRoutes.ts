@@ -3,6 +3,7 @@ import path from "node:path";
 import type { FastifyInstance } from "fastify";
 import { RequireUser } from "../Auth.ts";
 import { Db } from "../Db.ts";
+import { AllPeople, PersonById } from "../People.ts";
 import { GetRootDir, GetView, HttpError, Resolve, StatOrThrow } from "../Storage.ts";
 
 interface UserShareRow {
@@ -34,9 +35,7 @@ export async function UserShareRoutes(app: FastifyInstance) {
   app.addHook("preHandler", RequireUser);
 
   // Komu jde sdílet — jen jména, nic dalšího o účtech.
-  app.get("/users/directory", async (request) =>
-    Db.prepare("SELECT id, username FROM users WHERE id != ? ORDER BY username").all(request.user.id),
-  );
+  app.get("/users/directory", async (request) => AllPeople().filter((person) => person.id !== request.user.id));
 
   // S kým je konkrétní položka sdílená (pro dialog sdílení).
   app.get(
@@ -50,12 +49,14 @@ export async function UserShareRoutes(app: FastifyInstance) {
       const query = request.query as { path: string; all: boolean };
       const { relToRoot } = Resolve(GetView(request.user, { all: query.all }), query.path);
       return Db.prepare(`
-        SELECT s.id, s.recipient_id AS recipientId, u.username, s.can_write AS canWrite
-        FROM user_shares s JOIN users u ON u.id = s.recipient_id
-        WHERE s.owner_id = ? AND s.path = ? ORDER BY u.username
+        SELECT s.id, s.recipient_id AS recipientId, s.can_write AS canWrite
+        FROM user_shares s WHERE s.owner_id = ? AND s.path = ?
       `)
         .all(request.user.id, relToRoot)
-        .map((row) => ({ ...row, canWrite: (row as { canWrite: number }).canWrite === 1 }));
+        .map((row) => {
+          const share = row as { id: number; recipientId: number; canWrite: number };
+          return { id: share.id, recipient: PersonById(share.recipientId), canWrite: share.canWrite === 1 };
+        });
     },
   );
 
@@ -97,7 +98,7 @@ export async function UserShareRoutes(app: FastifyInstance) {
         const row = insert.get(request.user.id, recipientId, relToRoot, isDir ? 1 : 0, body.canWrite ? 1 : 0, now, now) as { id: number; is_new: number };
         // Notifikace jen při novém sdílení, ne při změně oprávnění.
         if (row.is_new) {
-          notify.run(recipientId, `${request.user.username} s tebou sdílí ${isDir ? "složku" : "soubor"} „${name}“`, row.id, now);
+          notify.run(recipientId, `${PersonById(request.user.id)?.name} s tebou sdílí ${isDir ? "složku" : "soubor"} „${name}“`, row.id, now);
           added++;
         }
       }
@@ -134,7 +135,7 @@ export async function UserShareRoutes(app: FastifyInstance) {
       .map((row) => ({
         id: row.id,
         name: path.posix.basename(row.path),
-        owner: row.owner,
+        owner: PersonById(row.owner_id),
         isDir: row.is_dir === 1,
         canWrite: row.can_write === 1 && row.is_dir === 1,
         size: row.is_dir ? 0 : (statSync(AbsPath(row.path), { throwIfNoEntry: false })?.size ?? 0),
@@ -152,7 +153,7 @@ export async function UserShareRoutes(app: FastifyInstance) {
       id: row.id,
       name: path.posix.basename(row.path),
       path: DisplayPath(row.path, request.user.username),
-      recipient: row.recipient,
+      recipient: PersonById(row.recipient_id),
       isDir: row.is_dir === 1,
       canWrite: row.can_write === 1,
       missing: !Exists(row.path),

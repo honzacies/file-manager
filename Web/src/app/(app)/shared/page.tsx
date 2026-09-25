@@ -8,15 +8,16 @@ import { FileIcon } from "@/Components/FileIcon";
 import { MoreButton } from "@/Components/Files/ActionMenu";
 import { PreviewModal } from "@/Components/Files/PreviewModal";
 import { PageHeader } from "@/Components/PageHeader";
-import { Panel } from "@/Components/Panel";
 import { EmptyView, ErrorView, LoadingRows } from "@/Components/StateViews";
+import { type Person, PersonLabel } from "@/Components/UserAvatar";
 import { ApiFetch, ErrorText, Query } from "@/lib/api";
 import { CanPreview, type Entry, FormatBytes, FormatDate } from "@/lib/format";
+import { ClickableRow, ListPanel } from "@/Components/ListPanel";
 
 interface IncomingShare {
   id: number;
   name: string;
-  owner: string;
+  owner: Person;
   isDir: boolean;
   canWrite: boolean;
   size: number;
@@ -73,22 +74,21 @@ export default function SharedWithMePage() {
           Až s tebou někdo bude sdílet soubor nebo složku, objeví se tady a přijde ti notifikace.
         </EmptyView>
       ) : (
-        <Panel className="p-2!">
-          <ul className="flex flex-col divide-y divide-separator">
+        <ListPanel>
             {shares.map((share) => (
               <li key={share.id}>
-                {/* biome-ignore lint/a11y/useKeyWithClickEvents: klávesnice jde přes tlačítko Otevřít v menu */}
-                <div className="flex cursor-pointer items-center gap-3 rounded-xl px-3 py-2.5 hover:bg-default/60" onClick={(event) => !(event.target as HTMLElement).closest("button") && Open(share)}>
+                <ClickableRow onOpen={() => Open(share)}>
                   <FileIcon name={share.name} isDir={share.isDir} className="shrink-0 text-[28px]" />
                   <div className="min-w-0 flex-1">
                     <p className="truncate text-sm font-medium" title={share.name}>
                       {share.name}
                     </p>
                     <p className="truncate text-xs text-muted">
-                      Od {share.owner} · {FormatDate(share.createdAt)}
+                      {FormatDate(share.createdAt)}
                       {!share.isDir && ` · ${FormatBytes(share.size)}`}
                     </p>
                   </div>
+                  <PersonLabel person={share.owner} className="hidden w-44 text-sm md:flex" />
                   <Chip size="sm" variant="soft" color={share.canWrite ? "accent" : "default"} className="hidden sm:flex">
                     {share.canWrite ? "Můžeš upravovat" : "Jen pro čtení"}
                   </Chip>
@@ -101,11 +101,10 @@ export default function SharedWithMePage() {
                     ]}
                     onAction={(id) => (id === "open" ? Open(share) : id === "download" ? (window.location.href = FileUrl(share, false)) : setLeave(share))}
                   />
-                </div>
+                </ClickableRow>
               </li>
             ))}
-          </ul>
-        </Panel>
+          </ListPanel>
       )}
 
       {preview && previewEntry && (
@@ -121,7 +120,7 @@ export default function SharedWithMePage() {
         isPending={pending}
         onConfirm={Leave}
       >
-        Ztratíš k položce přístup. U {leave?.owner} zůstane, jen ti ji bude muset nasdílet znovu.
+        Ztratíš k položce přístup. U {leave?.owner.name} zůstane, jen ti ji bude muset nasdílet znovu.
       </ConfirmDialog>
     </div>
   );

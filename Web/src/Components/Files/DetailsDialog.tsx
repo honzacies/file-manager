@@ -6,6 +6,7 @@ import { ApiFetch, ErrorText, Query } from "@/lib/api";
 import { FormatBytes, FormatDate } from "@/lib/format";
 import { AppDialog } from "../AppDialog";
 import { FileIcon } from "../FileIcon";
+import { type Person, PersonLabel } from "../UserAvatar";
 
 interface Details {
   name: string;
@@ -15,7 +16,7 @@ interface Details {
   folders: number;
   modified: number;
   created: number;
-  owner: string | null;
+  owner: Person | null;
   sharedWith: { username: string; canWrite: boolean }[];
   links: number;
 }
@@ -90,7 +91,11 @@ export function DetailsDialog({
             )}
           </Row>
           <Row label="Umístění">{location}</Row>
-          {details.owner && <Row label="Vlastník">{details.owner}</Row>}
+          {details.owner && (
+            <Row label="Vlastník">
+              <PersonLabel person={details.owner} />
+            </Row>
+          )}
           <Row label="Změněno">{FormatDate(details.modified)}</Row>
           <Row label="Vytvořeno">{FormatDate(details.created)}</Row>
           {(details.sharedWith.length > 0 || details.links > 0) && (

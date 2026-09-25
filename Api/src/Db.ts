@@ -96,9 +96,16 @@ Db.exec(`
   );
 `);
 
-// Migrace: sloupec přidaný po první verzi. NULL = bez limitu.
-const userColumns = Db.prepare("PRAGMA table_info(users)").all() as { name: string }[];
-if (!userColumns.some((column) => column.name === "quota_bytes")) Db.exec("ALTER TABLE users ADD COLUMN quota_bytes INTEGER");
+// Migrace: sloupce přidané po první verzi (bezpečné spustit opakovaně).
+const userColumns = new Set((Db.prepare("PRAGMA table_info(users)").all() as { name: string }[]).map((column) => column.name));
+for (const [column, type] of [
+  ["quota_bytes", "INTEGER"],
+  ["first_name", "TEXT"],
+  ["last_name", "TEXT"],
+  ["avatar_version", "INTEGER"],
+]) {
+  if (!userColumns.has(column)) Db.exec(`ALTER TABLE users ADD COLUMN ${column} ${type}`);
+}
 
 export function GetSetting(key: string): string | undefined {
   const row = Db.prepare("SELECT value FROM settings WHERE key = ?").get(key) as { value: string } | undefined;

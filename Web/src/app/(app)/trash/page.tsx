@@ -7,11 +7,11 @@ import { ConfirmDialog } from "@/Components/ConfirmDialog";
 import { FileIcon } from "@/Components/FileIcon";
 import { Icon } from "@/Components/Icon";
 import { PageHeader } from "@/Components/PageHeader";
-import { Panel } from "@/Components/Panel";
 import { useUser } from "@/Components/Session";
 import { EmptyView, ErrorView, LoadingRows } from "@/Components/StateViews";
 import { ApiFetch, ErrorText, Query } from "@/lib/api";
 import { FormatBytes, FormatDate } from "@/lib/format";
+import { ListPanel } from "@/Components/ListPanel";
 
 interface TrashItem {
   id: string;
@@ -90,8 +90,7 @@ export default function TrashPage() {
           Co smažeš, najdeš tady a můžeš to obnovit.
         </EmptyView>
       ) : (
-        <Panel className="p-2!">
-          <ul className="flex flex-col divide-y divide-separator">
+        <ListPanel>
             {data.items.map((item) => (
               <li key={item.id} className="flex flex-wrap items-center gap-3 px-3 py-2.5 sm:flex-nowrap">
                 <FileIcon name={item.name} isDir={item.isDir} className="shrink-0 text-[24px]" />
@@ -121,8 +120,7 @@ export default function TrashPage() {
                 </div>
               </li>
             ))}
-          </ul>
-        </Panel>
+          </ListPanel>
       )}
 
       <ConfirmDialog

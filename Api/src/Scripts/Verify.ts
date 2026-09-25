@@ -346,7 +346,7 @@ try {
     assert.equal(listed.color, "#ff0000", "barva se po přejmenování ztratila");
 
     await app.inject({ method: "POST", url: "/api/files/star", headers: alice, payload: { paths: ["novy.txt"], starred: true } });
-    const starred = (await app.inject({ url: "/api/starred", headers: alice })).json();
+    const starred = (await app.inject({ url: "/api/starred", headers: alice })).json().items;
     assert.ok(starred.some((item: { name: string; path: string }) => item.name === "novy.txt" && item.path === "novy.txt"));
     assert.ok(!(await app.inject({ url: "/api/starred", headers: bob2 })).body.includes("novy.txt\",\"isDir\":false,\"size\":1,\"modified\""), "bob vidí cizí hvězdičky");
 
@@ -354,7 +354,7 @@ try {
     Db.prepare("DELETE FROM recent WHERE user_id = (SELECT id FROM users WHERE username = 'alice')").run();
     await app.inject({ url: "/api/files/download?path=novy.txt", headers: alice });
     await app.inject({ url: "/api/files/download?path=maly.bin&inline=true&thumb=true", headers: alice });
-    const recent = (await app.inject({ url: "/api/recent", headers: alice })).json().map((item: { name: string }) => item.name);
+    const recent = (await app.inject({ url: "/api/recent", headers: alice })).json().items.map((item: { name: string }) => item.name);
     assert.ok(recent.includes("novy.txt"));
     assert.ok(!recent.includes("maly.bin"), "náhled v mřížce se zapsal do Nedávné");
 
@@ -366,7 +366,7 @@ try {
     const details = (await app.inject({ url: "/api/files/details?path=Archiv2", headers: alice })).json();
     assert.equal(details.isDir, true);
     assert.ok(details.files >= 1 && details.folders >= 1);
-    assert.equal(details.owner, "alice");
+    assert.equal(details.owner.username, "alice");
   });
 
   await Check("sdílení jen pro čtení: kopie a barva zakázané, hvězdička povolená", async () => {
@@ -374,8 +374,52 @@ try {
     assert.equal((await app.inject({ method: "POST", url: "/api/files/copy", headers: bob2, payload: { paths: [""], share: file.id } })).statusCode, 403);
     const star = await app.inject({ method: "POST", url: "/api/files/star", headers: bob2, payload: { paths: [""], share: file.id, starred: true } });
     assert.equal(star.statusCode, 200);
-    const bobStarred = (await app.inject({ url: "/api/starred", headers: bob2 })).json();
+    const bobStarred = (await app.inject({ url: "/api/starred", headers: bob2 })).json().items;
     assert.ok(bobStarred.some((item: { share: number }) => item.share === file.id));
+  });
+
+  await Check("profil: jméno se hezky naformátuje, vlastník je vidět v seznamu", async () => {
+    const saved = await app.inject({ method: "PUT", url: "/api/account/profile", headers: alice, payload: { firstName: "  alice ", lastName: "novák-DVOŘÁK" } });
+    assert.equal(saved.json().name, "Alice Novák-DVOŘÁK");
+    assert.equal((await app.inject({ url: "/api/auth/me", headers: alice })).json().name, "Alice Novák-DVOŘÁK");
+    const listing = (await app.inject({ url: "/api/files", headers: alice })).json();
+    assert.equal(listing.entries[0].owner, "alice");
+    assert.equal(listing.people.alice.name, "Alice Novák-DVOŘÁK");
+    assert.ok(!JSON.stringify(listing.people).includes("password"), "v people je heslo");
+    const tooLong = await app.inject({ method: "PUT", url: "/api/account/profile", headers: alice, payload: { firstName: "x".repeat(51), lastName: "" } });
+    assert.equal(tooLong.statusCode, 400);
+  });
+
+  await Check("avatar: jen WebP, omezená velikost, jen pro přihlášené, cizí nejde přepsat", async () => {
+    const boundary = "----avatar";
+    const send = (bytes: Buffer, headers: { cookie: string }) =>
+      app.inject({
+        method: "POST",
+        url: "/api/account/avatar",
+        headers: { ...headers, "content-type": `multipart/form-data; boundary=${boundary}` },
+        payload: Buffer.concat([
+          Buffer.from(`--${boundary}\r\nContent-Disposition: form-data; name="file"; filename="a.webp"\r\nContent-Type: image/webp\r\n\r\n`),
+          bytes,
+          Buffer.from(`\r\n--${boundary}--\r\n`),
+        ]),
+      });
+    const webp = Buffer.concat([Buffer.from("RIFF"), Buffer.alloc(4), Buffer.from("WEBPVP8 "), Buffer.alloc(20)]);
+    assert.equal((await send(Buffer.from("<svg onload=alert(1)>"), alice)).statusCode, 400);
+    assert.equal((await send(Buffer.concat([webp, Buffer.alloc(600 * 1024)]), alice)).statusCode, 413);
+    const ok = await send(webp, alice);
+    assert.equal(ok.statusCode, 200);
+    const aliceId = ok.json().id;
+    assert.equal(typeof ok.json().avatar, "number");
+    const image = await app.inject({ url: `/api/users/${aliceId}/avatar`, headers: bob2 });
+    assert.equal(image.statusCode, 200);
+    assert.equal(image.headers["content-type"], "image/webp");
+    assert.equal((await app.inject({ url: `/api/users/${aliceId}/avatar` })).statusCode, 401);
+    assert.equal((await app.inject({ url: "/api/users/..%2F..%2Fcloud/avatar", headers: bob2 })).statusCode, 404);
+    // Bob nahraje svůj — Alicin zůstane
+    await send(webp, bob2);
+    assert.equal((await app.inject({ url: `/api/users/${aliceId}/avatar`, headers: bob2 })).statusCode, 200);
+    await app.inject({ method: "DELETE", url: "/api/account/avatar", headers: alice });
+    assert.equal((await app.inject({ url: `/api/users/${aliceId}/avatar`, headers: bob2 })).statusCode, 404);
   });
 
   await Check("rate limit na přihlášení", async () => {
@@ -385,6 +429,41 @@ try {
       if (response.statusCode === 429) limited = true;
     }
     assert.ok(limited);
+  });
+
+  // ---- Safe Test My Code 2026-09-25: regrese nálezů --------------------------------
+
+  await Check("kořen cloudu nesmí obsahovat databázi (jinak by šla stáhnout cloud.db)", async () => {
+    const put = (rootDir: string) => app.inject({ method: "PUT", url: "/api/admin/settings", headers: admin, payload: { rootDir } });
+    assert.equal((await put(temp)).statusCode, 400, "kořen nad DATA_DIR");
+    assert.equal((await put(path.join(temp, "data"))).statusCode, 400, "kořen = DATA_DIR");
+    assert.equal((await app.inject({ url: "/api/files/download?all=true&path=data/cloud.db", headers: admin })).statusCode, 404);
+  });
+
+  await Check("název delší než 255 bajtů je 400, ne 500", async () => {
+    const long = await app.inject({ method: "POST", url: "/api/files/folder", headers: alice, payload: { name: "ž".repeat(200) } });
+    assert.equal(long.statusCode, 400);
+  });
+
+  await Check("veřejné sdílení má rate limit na IP", async () => {
+    let limited = false;
+    for (let i = 0; i < 310 && !limited; i++) {
+      limited = (await app.inject({ url: `/api/public/shares/neexistuje${i}` })).statusCode === 429;
+    }
+    assert.ok(limited);
+  });
+
+  await Check("X-Forwarded-For platí jen od lokální proxy, z LAN ho podvrhnout nejde", async () => {
+    const attempt = (ip: string, forwarded: string) =>
+      app.inject({ method: "POST", url: "/api/auth/login", remoteAddress: ip, headers: { "x-forwarded-for": forwarded }, payload: { username: "x", password: "yyyyyyyy" } });
+    // přes proxy (127.0.0.1): klient 10.0.0.1 vyčerpá svůj limit, jiný klient za stejnou proxy ne
+    for (let i = 0; i < 11; i++) await attempt("127.0.0.1", "10.0.0.1");
+    assert.equal((await attempt("127.0.0.1", "10.0.0.1")).statusCode, 429);
+    assert.notEqual((await attempt("127.0.0.1", "10.0.0.2")).statusCode, 429, "limit společný pro všechny za proxy");
+    // přímo z LAN: měnit X-Forwarded-For nepomůže
+    let limited = false;
+    for (let i = 0; i < 12; i++) limited = (await attempt("192.168.1.50", `6.6.6.${i}`)).statusCode === 429 || limited;
+    assert.ok(limited, "podvržený X-Forwarded-For obešel limit");
   });
 
   console.log(`\n\x1b[1;32m${passed} kontrol prošlo.\x1b[0m`);

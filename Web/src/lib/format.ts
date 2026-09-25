@@ -6,6 +6,8 @@ export interface Entry {
   // barva složky (#rrggbb) a hvězdička přihlášeného uživatele
   color?: string;
   starred?: boolean;
+  // login vlastníka; jméno a avatar jsou v `people` z odpovědi API
+  owner?: string;
 }
 
 // Paleta barev složek (4 řady po 8 jako v Google Drive).

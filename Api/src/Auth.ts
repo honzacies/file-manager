@@ -73,6 +73,16 @@ export function PurgeExpiredSessions() {
   Db.prepare("DELETE FROM sessions WHERE expires_at <= ?").run(Date.now());
 }
 
+// Heslo přihlášeného uživatele (re-autentizace před citlivou akcí). Špatné -> 403.
+export async function RequireOwnPassword(userId: number, password: string | undefined, message = "Tvoje heslo nesedí.") {
+  const row = Db.prepare("SELECT password_hash FROM users WHERE id = ?").get(userId) as { password_hash: string } | undefined;
+  if (!password || !(await VerifyPassword(row?.password_hash, password))) {
+    const error = new Error(message) as Error & { statusCode: number };
+    error.statusCode = 403;
+    throw error;
+  }
+}
+
 // Guardy — `return reply` je nutné, jinak Fastify u async hooku pustí request dál.
 export async function RequireUser(request: FastifyRequest, reply: FastifyReply) {
   const user = LookupSession(request.cookies[SESSION_COOKIE]);

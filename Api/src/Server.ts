@@ -9,6 +9,7 @@ import { AdminRoutes } from "./Routes/AdminRoutes.ts";
 import { AuthRoutes } from "./Routes/AuthRoutes.ts";
 import { FileRoutes } from "./Routes/FileRoutes.ts";
 import { OrganizeRoutes } from "./Routes/OrganizeRoutes.ts";
+import { ProfileRoutes } from "./Routes/ProfileRoutes.ts";
 import { ShareRoutes } from "./Routes/ShareRoutes.ts";
 import { TrashRoutes } from "./Routes/TrashRoutes.ts";
 import { UserShareRoutes } from "./Routes/UserShareRoutes.ts";
@@ -34,7 +35,9 @@ type AppError = Error & { statusCode?: number; code?: string; validation?: unkno
 
 export async function BuildApp() {
   // Jen varování a chyby — log každého requestu by na domácím serveru jen zahlcoval `docker logs`.
-  const app = Fastify({ logger: { level: "warn" } });
+  // trustProxy: IP klienta z X-Forwarded-For jen od lokální proxy (tailscale serve, Caddy, cloudflared
+  // na hostiteli -> Docker brána 172.16/12). Přímé spojení z LAN hlavičku podvrhnout nemůže.
+  const app = Fastify({ logger: { level: "warn" }, trustProxy: ["127.0.0.1", "::1", "172.16.0.0/12"] });
 
   await app.register(cookie);
   // Domácí server — velikost souboru neomezujeme.
@@ -47,6 +50,7 @@ export async function BuildApp() {
     if (error.code === "ENOENT") return reply.code(404).send({ error: "Soubor nebo složka neexistuje." });
     if (error.code === "EACCES" || error.code === "EPERM") return reply.code(403).send({ error: "Server k tomuhle nemá na disku přístup." });
     if (error.code === "ENOSPC") return reply.code(507).send({ error: "Na disku došlo místo." });
+    if (error.code === "ENAMETOOLONG") return reply.code(400).send({ error: "Název nebo cesta je moc dlouhá." });
     const status = error.statusCode ?? 500;
     if (status >= 500) request.log.error(error);
     return reply.code(status).send({ error: status >= 500 && Env.IsProduction ? "Něco se pokazilo. Zkus to znovu." : error.message });
@@ -65,6 +69,7 @@ export async function BuildApp() {
       await api.register(AuthRoutes);
       await api.register(FileRoutes);
       await api.register(OrganizeRoutes);
+      await api.register(ProfileRoutes);
       await api.register(TrashRoutes);
       await api.register(ShareRoutes);
       await api.register(UserShareRoutes);

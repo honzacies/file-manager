@@ -6,10 +6,10 @@ import { FileIcon } from "@/Components/FileIcon";
 import { PreviewModal } from "@/Components/Files/PreviewModal";
 import { Icon } from "@/Components/Icon";
 import { PageHeader } from "@/Components/PageHeader";
-import { Panel } from "@/Components/Panel";
 import { EmptyView, LoadingRows } from "@/Components/StateViews";
 import { CanPreview, type Entry, FormatBytes, FormatDate } from "@/lib/format";
 import { ListOffline, type OfflineFile, OfflineSupported, RemoveOffline } from "@/lib/offline";
+import { ClickableRow, ListPanel } from "@/Components/ListPanel";
 
 // navigator.onLine jako React stav (bez setState v efektu)
 function useOnline() {
@@ -101,15 +101,10 @@ export default function OfflinePage() {
           V souborech klikni pravým tlačítkem na soubor a vyber <b>Zpřístupnit offline</b>.
         </EmptyView>
       ) : (
-        <Panel className="p-2!">
-          <ul className="flex flex-col divide-y divide-separator">
+        <ListPanel>
             {entries.map((entry) => (
               <li key={entry.key}>
-                {/* biome-ignore lint/a11y/useKeyWithClickEvents: klávesnice jde přes tlačítka vpravo */}
-                <div
-                  className="flex cursor-pointer items-center gap-3 rounded-xl px-3 py-2.5 hover:bg-default/60"
-                  onClick={(event) => !(event.target as HTMLElement).closest("button") && Open(entry)}
-                >
+                <ClickableRow onOpen={() => Open(entry)}>
                   <FileIcon name={entry.name} isDir={false} className="shrink-0 text-[26px]" />
                   <div className="min-w-0 flex-1">
                     <p className="truncate text-sm font-medium">{entry.name}</p>
@@ -123,11 +118,10 @@ export default function OfflinePage() {
                   <Button isIconOnly size="sm" variant="ghost" aria-label={`Odebrat ${entry.name} z offline`} onPress={() => Remove(entry)} className="text-danger!">
                     <Icon name="delete" className="text-[18px]" />
                   </Button>
-                </div>
+                </ClickableRow>
               </li>
             ))}
-          </ul>
-        </Panel>
+          </ListPanel>
       )}
 
       <PreviewModal

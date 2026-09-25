@@ -1,6 +1,7 @@
 import type { FastifyInstance } from "fastify";
-import { CreateSession, DeleteOtherSessions, DeleteSession, HashPassword, RequireUser, SESSION_COOKIE, type SessionUser, VerifyPassword } from "../Auth.ts";
+import { CreateSession, DeleteOtherSessions, DeleteSession, HashPassword, RequireOwnPassword, RequireUser, SESSION_COOKIE, type SessionUser, VerifyPassword } from "../Auth.ts";
 import { Db } from "../Db.ts";
+import { PersonById } from "../People.ts";
 import { HttpError } from "../Storage.ts";
 
 export async function AuthRoutes(app: FastifyInstance) {
@@ -47,7 +48,8 @@ export async function AuthRoutes(app: FastifyInstance) {
   app.register(async (scope) => {
     scope.addHook("preHandler", RequireUser);
 
-    scope.get("/auth/me", async (request) => request.user);
+    // Role z relace + jméno a avatar pro zobrazení.
+    scope.get("/auth/me", async (request) => ({ ...PersonById(request.user.id), role: request.user.role }));
 
     scope.post(
       "/account/password",
@@ -62,8 +64,7 @@ export async function AuthRoutes(app: FastifyInstance) {
       },
       async (request) => {
         const { currentPassword, newPassword } = request.body as { currentPassword: string; newPassword: string };
-        const row = Db.prepare("SELECT password_hash FROM users WHERE id = ?").get(request.user.id) as { password_hash: string };
-        if (!(await VerifyPassword(row.password_hash, currentPassword))) throw new HttpError(403, "Současné heslo nesedí.");
+        await RequireOwnPassword(request.user.id, currentPassword, "Současné heslo nesedí.");
         Db.prepare("UPDATE users SET password_hash = ? WHERE id = ?").run(await HashPassword(newPassword), request.user.id);
         // Ostatní zařízení odhlásit, aktuální relace zůstává.
         DeleteOtherSessions(request.user.id, request.cookies[SESSION_COOKIE] ?? "");

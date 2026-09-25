@@ -3,7 +3,8 @@ import path from "node:path";
 import type { FastifyInstance } from "fastify";
 import { RequireUser } from "../Auth.ts";
 import { Db } from "../Db.ts";
-import { GetRootDir, GetView, HttpError, ListDir, Resolve, SendFile, StatOrThrow } from "../Storage.ts";
+import { PersonById } from "../People.ts";
+import { GetRootDir, GetView, HttpError, ListDir, RelFromRoot, Resolve, SendFile, StatOrThrow } from "../Storage.ts";
 
 interface ShareRow {
   token: string;
@@ -97,25 +98,27 @@ export async function ShareRoutes(app: FastifyInstance) {
     properties: { path: { type: "string", default: "" }, inline: { type: "boolean", default: false } },
   } as const;
 
-  app.get("/public/shares/:token", { schema: { querystring: PublicQuery } }, async (request) => {
+  const PublicLimit = { rateLimit: { max: 300, timeWindow: "1 minute" } };
+
+  app.get("/public/shares/:token", { config: PublicLimit, schema: { querystring: PublicQuery } }, async (request) => {
     const share = FindShare((request.params as { token: string }).token);
     const { path: clientPath } = request.query as { path: string };
     const { abs, rel } = ResolveInShare(share, clientPath);
     const stat = await StatOrThrow(abs);
-    const owner = Db.prepare("SELECT username FROM users WHERE id = ?").get(share.user_id) as { username: string } | undefined;
+    const owner = PersonById(share.user_id);
     return {
       name: path.posix.basename(share.path),
-      owner: owner?.username ?? null,
+      owner: owner?.name ?? null,
       expiresAt: share.expires_at,
       isDir: stat.isDirectory(),
       path: rel,
       size: stat.isDirectory() ? 0 : stat.size,
       // Barvy složek ano, hvězdičky ne — ty jsou osobní.
-      entries: stat.isDirectory() ? await ListDir(abs, false, path.relative(GetRootDir(), abs).split(path.sep).join("/")) : [],
+      entries: stat.isDirectory() ? await ListDir(abs, false, RelFromRoot(GetRootDir(), abs)) : [],
     };
   });
 
-  app.get("/public/shares/:token/download", { schema: { querystring: PublicQuery } }, async (request, reply) => {
+  app.get("/public/shares/:token/download", { config: PublicLimit, schema: { querystring: PublicQuery } }, async (request, reply) => {
     const share = FindShare((request.params as { token: string }).token);
     const query = request.query as { path: string; inline: boolean };
     return SendFile(request, reply, ResolveInShare(share, query.path).abs, query.inline);

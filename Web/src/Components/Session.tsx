@@ -5,14 +5,16 @@ import { usePathname, useRouter } from "next/navigation";
 import { createContext, type ReactNode, use, useEffect, useState } from "react";
 import { ApiFetch } from "@/lib/api";
 import { ClearOffline } from "@/lib/offline";
+import type { Person } from "./UserAvatar";
 
-export interface User {
-  id: number;
-  username: string;
+export interface User extends Person {
   role: "admin" | "user";
 }
 
 const SessionContext = createContext<User | null>(null);
+// Po změně jména/avataru se přihlášený uživatel aktualizuje bez reloadu.
+const SetUserContext = createContext<(user: User) => void>(() => {});
+export const useSetUser = () => use(SetUserContext);
 
 // Poslední přihlášený uživatel — bez připojení se appka otevře v offline režimu místo přesměrování na login.
 const USER_KEY = "cloud.user";
@@ -66,5 +68,9 @@ export function SessionGate({ children }: { children: ReactNode }) {
       </div>
     );
   }
-  return <SessionContext value={user}>{children}</SessionContext>;
+  return (
+    <SessionContext value={user}>
+      <SetUserContext value={setUser}>{children}</SetUserContext>
+    </SessionContext>
+  );
 }

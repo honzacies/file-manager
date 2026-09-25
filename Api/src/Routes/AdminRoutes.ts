@@ -1,10 +1,11 @@
 import { constants, mkdirSync } from "node:fs";
 import fs from "node:fs/promises";
 import path from "node:path";
-import type { FastifyInstance, FastifyRequest } from "fastify";
-import { HashPassword, RequireAdmin, RequireUser, VerifyPassword } from "../Auth.ts";
+import type { FastifyInstance } from "fastify";
+import { HashPassword, RequireAdmin, RequireOwnPassword, RequireUser } from "../Auth.ts";
 import { Db, SetSetting } from "../Db.ts";
 import { Env } from "../Env.ts";
+import { PersonById } from "../People.ts";
 import { DirSize, GetRootDir, HttpError } from "../Storage.ts";
 
 const USERNAME = { type: "string", pattern: "^[A-Za-z0-9_-][A-Za-z0-9_.-]{1,31}$" } as const;
@@ -13,14 +14,8 @@ const ROLE = { type: "string", enum: ["admin", "user"] } as const;
 // null = bez limitu
 const QUOTA = { type: ["integer", "null"], minimum: 0 } as const;
 
-// Akce, po které vlastník účtu ztratí přístup (reset hesla, smazání), musí
-// potvrdit heslem ten, kdo ji dělá — platná session nestačí.
-async function RequireOwnPassword(request: FastifyRequest, password: string | undefined) {
-  const row = Db.prepare("SELECT password_hash FROM users WHERE id = ?").get(request.user.id) as { password_hash: string };
-  if (!password || !(await VerifyPassword(row.password_hash, password))) {
-    throw new HttpError(403, "Tvoje heslo nesedí.");
-  }
-}
+// Akce, po které vlastník účtu ztratí přístup (reset hesla, smazání), musí potvrdit heslem
+// ten, kdo ji dělá — platná session nestačí (RequireOwnPassword).
 
 function AdminCount() {
   return (Db.prepare("SELECT COUNT(*) AS n FROM users WHERE role = 'admin'").get() as { n: number }).n;
@@ -48,6 +43,7 @@ export async function AdminRoutes(app: FastifyInstance) {
         createdAt: u.created_at,
         quotaBytes: u.quota_bytes,
         usedBytes: await DirSize(path.join(root, u.username)),
+        person: PersonById(u.id),
       })),
     );
   });
@@ -91,7 +87,7 @@ export async function AdminRoutes(app: FastifyInstance) {
       const target = Db.prepare("SELECT id, role FROM users WHERE id = ?").get(id) as { id: number; role: string } | undefined;
       if (!target) throw new HttpError(404, "Uživatel neexistuje.");
 
-      if (body.newPassword) await RequireOwnPassword(request, body.currentPassword);
+      if (body.newPassword) await RequireOwnPassword(request.user.id, body.currentPassword);
       if (body.role && body.role !== target.role) {
         if (target.role === "admin" && AdminCount() <= 1) throw new HttpError(400, "Poslední admin musí zůstat adminem.");
         Db.prepare("UPDATE users SET role = ? WHERE id = ?").run(body.role, id);
@@ -113,7 +109,7 @@ export async function AdminRoutes(app: FastifyInstance) {
     async (request) => {
       const id = Number((request.params as { id: string }).id);
       if (id === request.user.id) throw new HttpError(400, "Sám sebe smazat nemůžeš.");
-      await RequireOwnPassword(request, (request.body as { currentPassword: string }).currentPassword);
+      await RequireOwnPassword(request.user.id, (request.body as { currentPassword: string }).currentPassword);
       // Soubory na disku zůstávají — smazání účtu nemá tiše smazat data.
       Db.prepare("DELETE FROM users WHERE id = ?").run(id);
       return { ok: true };
@@ -137,6 +133,11 @@ export async function AdminRoutes(app: FastifyInstance) {
       const { rootDir } = request.body as { rootDir: string };
       if (!path.isAbsolute(rootDir)) throw new HttpError(400, "Cesta musí být absolutní (začínat /).");
       const resolved = path.resolve(rootDir);
+      // Kořen nad DATA_DIR by ve "Všech souborech" pustil ke stažení cloud.db s hashi hesel.
+      const inside = (child: string, parent: string) => child === parent || child.startsWith(parent + path.sep);
+      if (inside(Env.DataDir, resolved) || inside(resolved, Env.DataDir)) {
+        throw new HttpError(400, "Tahle složka obsahuje data serveru (databázi), jako kořen ji použít nejde.");
+      }
       const stat = await fs.stat(resolved).catch(() => null);
       if (!stat?.isDirectory()) throw new HttpError(400, "Tahle složka neexistuje.");
       await fs.access(resolved, constants.W_OK).catch(() => {

@@ -4,6 +4,7 @@ import type { FastifyInstance } from "fastify";
 import { ZipFile } from "yazl";
 import { RequireUser, type SessionUser } from "../Auth.ts";
 import { Db } from "../Db.ts";
+import { PeopleByUsername } from "../People.ts";
 import {
   AssertQuota,
   AssertWritable,
@@ -76,8 +77,12 @@ async function Collection(user: SessionUser, rows: { path: string; share_id: num
       return { key: row.path, name: path.posix.basename(row.path), isDir, size: isDir ? 0 : stat.size, modified: stat.mtimeMs, at: row.at, ...scope };
     }),
   );
-  const found = items.filter((item) => item !== null);
-  return Decorate(found, (item) => item.key, user.id);
+  const found = Decorate(
+    items.filter((item) => item !== null),
+    (item) => item.key,
+    user.id,
+  );
+  return { items: found, people: PeopleByUsername(found.map((item) => item.owner ?? "")) };
 }
 
 export async function OrganizeRoutes(app: FastifyInstance) {
@@ -180,7 +185,7 @@ export async function OrganizeRoutes(app: FastifyInstance) {
         folders,
         modified: stat.mtimeMs,
         created: stat.birthtimeMs || stat.ctimeMs,
-        owner: relToRoot.split("/")[0] || null,
+        owner: PeopleByUsername([relToRoot.split("/")[0]])[relToRoot.split("/")[0]] ?? null,
         sharedWith,
         links,
       };
@@ -216,10 +221,12 @@ export async function OrganizeRoutes(app: FastifyInstance) {
         results.push({ name: path.relative(abs, full).split(path.sep).join("/"), isDir, size: isDir ? 0 : stat.size, modified: stat.mtimeMs });
         if (results.length >= LIMIT) break;
       }
+      const entries = Decorate(results, (entry) => [relToRoot, entry.name].filter(Boolean).join("/"), request.user.id);
       return {
         readOnly: view.readOnly,
         truncated: results.length >= LIMIT,
-        entries: Decorate(results, (entry) => [relToRoot, entry.name].filter(Boolean).join("/"), request.user.id),
+        entries,
+        people: PeopleByUsername(entries.map((entry) => entry.owner ?? "")),
       };
     },
   );

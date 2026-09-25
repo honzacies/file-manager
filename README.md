@@ -1,6 +1,6 @@
 # Cloud
 
-Domácí cloud: soubory, uživatelé, kvóty, koš, sdílení s uživateli (s notifikacemi) i odkazem, náhledy (obrázky, video, audio, PDF, text),
+Domácí cloud: soubory, uživatelé s profilem a avatarem, kvóty, koš, sdílení s uživateli (s notifikacemi) i odkazem, náhledy (obrázky, video, audio, PDF, text),
 ZIP stažení složek, barvy složek, hvězdičky, Nedávné, hledání v podsložkách a offline soubory (PWA).
 Běží jako jeden Docker kontejner — Fastify API servíruje i statický export Next.js webu.
 
@@ -31,7 +31,8 @@ Soubory leží na disku normálně jako `<CLOUD_DIR>/<username>/…`, smazané v
 cd Api && npm i && npm run dev        # API na :8080, data v ./data a ./cloud
 cd Web && npm i && npm run dev        # web na :3000, /api se přeposílá na API (API_URL)
 cd Api && npm run create-admin -- honza   # heslo ze stdin
-cd Api && npm run verify              # bezpečnostní self-check (25 kontrol přes app.inject)
+cd Api && npm run verify              # bezpečnostní self-check (31 kontrol přes app.inject)
+cd Web && node src/lib/safeRedirect.check.ts   # přesměrování po loginu nevede ven
 ```
 
 ## Bezpečnost v kostce
@@ -40,6 +41,8 @@ cd Api && npm run verify              # bezpečnostní self-check (25 kontrol p�
 - Každá cesta od klienta se normalizuje uvnitř složky uživatele; admin vidí celý kořen jen v režimu „Všechny soubory".
 - Nahrané HTML/SVG se nikdy nespustí na originu appky (text/plain nebo `CSP: sandbox`, `nosniff`).
 - Reset cizího hesla a smazání účtu potvrzuje admin vlastním heslem.
+- Kořen cloudu nesmí obsahovat `DATA_DIR` (jinak by šla stáhnout databáze). Avatary jen WebP ≤ 512 kB (kontrola hlavičky).
+- `trustProxy` jen pro localhost a Docker síť — za `tailscale serve`/tunelem má každý klient vlastní rate limit, z LAN `X-Forwarded-For` podvrhnout nejde.
 - Sdílení s uživatelem: každý request nese `share` id a server ho hledá s `recipient_id` přihlášeného — cizí sdílení je 404. Zápis jen se sdílením „může upravovat“, kvóta a koš patří vlastníkovi.
 
 ## Vědomě vynecháno

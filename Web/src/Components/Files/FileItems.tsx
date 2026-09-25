@@ -4,6 +4,7 @@ import { Checkbox } from "@heroui/react";
 import { type Entry, FormatBytes, FormatDate, KindOf } from "@/lib/format";
 import { FileIcon } from "../FileIcon";
 import { Icon } from "../Icon";
+import { type Person, PersonLabel, UserAvatar } from "../UserAvatar";
 import { type Action, MoreButton } from "./ActionMenu";
 
 export type SortKey = "name" | "modified" | "size";
@@ -14,9 +15,19 @@ export interface Sort {
 
 export const DRAG_TYPE = "application/x-cloud-items";
 
-// Sloupce seznamu: [checkbox] název [změněno velikost] akce. Celé literály kvůli Tailwindu.
-const LIST_COLUMNS = "grid-cols-[auto_1fr_auto] sm:grid-cols-[auto_1fr_10rem_6rem_auto]";
-const LIST_COLUMNS_READONLY = "grid-cols-[1fr_auto] sm:grid-cols-[1fr_10rem_6rem_auto]";
+// Sloupce seznamu: [checkbox] název [vlastník] [změněno velikost] akce. Vlastník od md, datum a velikost od sm.
+// Celé literály kvůli Tailwindu (poskládané třídy by nevygeneroval).
+const COLUMNS = {
+  select: {
+    owner: "grid-cols-[auto_1fr_auto] sm:grid-cols-[auto_1fr_10rem_6rem_auto] md:grid-cols-[auto_1fr_11rem_10rem_6rem_auto]",
+    plain: "grid-cols-[auto_1fr_auto] sm:grid-cols-[auto_1fr_10rem_6rem_auto]",
+  },
+  readOnly: {
+    owner: "grid-cols-[1fr_auto] sm:grid-cols-[1fr_10rem_6rem_auto] md:grid-cols-[1fr_11rem_10rem_6rem_auto]",
+    plain: "grid-cols-[1fr_auto] sm:grid-cols-[1fr_10rem_6rem_auto]",
+  },
+};
+const Columns = (handlers: ItemHandlers) => COLUMNS[handlers.readOnly ? "readOnly" : "select"][handlers.ownerOf ? "owner" : "plain"];
 
 export interface ItemHandlers {
   selected: Set<string>;
@@ -31,6 +42,8 @@ export interface ItemHandlers {
   onDropInto: (folder: string, names: string[]) => void;
   thumbUrl?: (entry: Entry) => string;
   isOffline?: (entry: Entry) => boolean;
+  // vlastník položky (jméno + avatar); bez něj se sloupec Vlastník nezobrazí (veřejné sdílení)
+  ownerOf?: (entry: Entry) => Person | null | undefined;
   readOnly?: boolean;
 }
 
@@ -137,7 +150,7 @@ function ListRow({ entry, handlers }: { entry: Entry; handlers: ItemHandlers }) 
   return (
     <div
       {...props}
-      className={`group grid cursor-default ${handlers.readOnly ? LIST_COLUMNS_READONLY : LIST_COLUMNS} items-center gap-3 rounded-xl px-2 py-1.5 select-none data-[drop=true]:bg-accent/15 data-[drop=true]:ring-2 data-[drop=true]:ring-accent ${
+      className={`group grid cursor-default ${Columns(handlers)} items-center gap-3 rounded-xl px-2 py-1.5 select-none data-[drop=true]:bg-accent/15 data-[drop=true]:ring-2 data-[drop=true]:ring-accent ${
         selected ? "bg-accent/10" : "hover:bg-default/60"
       } ${handlers.focused === entry.name ? "outline-2 -outline-offset-2 outline-focus/50" : ""}`}
     >
@@ -148,11 +161,13 @@ function ListRow({ entry, handlers }: { entry: Entry; handlers: ItemHandlers }) 
           <NameLabel entry={entry} handlers={handlers} className="text-sm" />
           {/* na mobilu metadata pod názvem místo sloupců */}
           <p className="text-xs text-muted sm:hidden">
+            {handlers.ownerOf && `${handlers.ownerOf(entry)?.name ?? "—"} · `}
             {FormatDate(entry.modified)}
             {!entry.isDir && ` · ${FormatBytes(entry.size)}`}
           </p>
         </div>
       </div>
+      {handlers.ownerOf && <PersonLabel person={handlers.ownerOf(entry)} className="hidden text-xs md:flex" />}
       <span className="hidden text-xs text-muted tabular-nums sm:block">{FormatDate(entry.modified)}</span>
       <span className="hidden text-right text-xs text-muted tabular-nums sm:block">{entry.isDir ? "—" : FormatBytes(entry.size)}</span>
       <MoreButton label={`Akce pro ${entry.name}`} actions={handlers.actionsFor(entry)} onAction={(id) => handlers.onAction(entry, id)} />
@@ -171,6 +186,11 @@ function GridTile({ entry, handlers }: { entry: Entry; handlers: ItemHandlers })
         selected ? "border-accent bg-accent/10" : "border-border bg-surface hover:border-muted/40"
       } ${handlers.focused === entry.name ? "outline-2 outline-offset-2 outline-focus/50" : ""}`}
     >
+      {handlers.ownerOf?.(entry) && (
+        <div className="absolute top-2 right-2 z-10" title={handlers.ownerOf(entry)?.name}>
+          <UserAvatar person={handlers.ownerOf(entry)} className="size-7! text-[11px]! ring-2 ring-surface" />
+        </div>
+      )}
       <div className="grid aspect-4/3 place-items-center overflow-hidden bg-surface-secondary">
         {showThumb ? (
           // ponytail: náhled = originál s loading="lazy"; generovat miniatury, až to bude na mobilních datech pomalé
@@ -184,7 +204,7 @@ function GridTile({ entry, handlers }: { entry: Entry; handlers: ItemHandlers })
         <MoreButton label={`Akce pro ${entry.name}`} actions={handlers.actionsFor(entry)} onAction={(id) => handlers.onAction(entry, id)} />
       </div>
       {!handlers.readOnly && (
-        <div className={`absolute top-2 left-2 rounded-md bg-surface/80 p-0.5 backdrop-blur ${selected ? "" : "opacity-0 group-hover:opacity-100 focus-within:opacity-100"}`}>
+        <div className={`absolute top-2 left-2 z-10 rounded-md bg-surface/80 p-0.5 backdrop-blur ${selected ? "" : "opacity-0 group-hover:opacity-100 focus-within:opacity-100"}`}>
           <SelectBox entry={entry} handlers={handlers} />
         </div>
       )}
@@ -221,7 +241,7 @@ export function FileItems({
 
   return (
     <div>
-      <div className={`sticky top-14 z-10 grid ${handlers.readOnly ? LIST_COLUMNS_READONLY : LIST_COLUMNS} items-center gap-3 border-b border-separator bg-background px-2 py-2 lg:top-0`}>
+      <div className={`sticky top-14 z-10 grid ${Columns(handlers)} items-center gap-3 border-b border-separator bg-background px-2 py-2 lg:top-0`}>
         {!handlers.readOnly && (
           <Checkbox aria-label="Označit vše" isSelected={allSelected} isIndeterminate={!allSelected && handlers.selected.size > 0} onChange={onSelectAll}>
             <Checkbox.Control>
@@ -230,6 +250,7 @@ export function FileItems({
           </Checkbox>
         )}
         <SortHeader label="Název" sortKey="name" sort={sort} onSort={onSort} />
+        {handlers.ownerOf && <span className="hidden px-1 text-xs font-medium text-muted md:block">Vlastník</span>}
         <SortHeader label="Změněno" sortKey="modified" sort={sort} onSort={onSort} className="hidden sm:flex" />
         <SortHeader label="Velikost" sortKey="size" sort={sort} onSort={onSort} className="hidden justify-self-end sm:flex" />
         <span className="w-8" />

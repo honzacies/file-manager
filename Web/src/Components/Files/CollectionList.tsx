@@ -7,10 +7,11 @@ import { ApiFetch, ErrorText, Query } from "@/lib/api";
 import { CanPreview, type Entry, FormatBytes, FormatDate } from "@/lib/format";
 import { FileIcon } from "../FileIcon";
 import { Icon } from "../Icon";
-import { Panel } from "../Panel";
 import { EmptyView, ErrorView, LoadingRows } from "../StateViews";
+import { type Person, PersonLabel } from "../UserAvatar";
 import { MoreButton } from "./ActionMenu";
 import { PreviewModal } from "./PreviewModal";
+import { ClickableRow, ListPanel } from "../ListPanel";
 
 // Položka z /api/recent nebo /api/starred — nese rozsah, ve kterém se otevírá.
 export interface CollectionItem extends Entry {
@@ -38,12 +39,17 @@ export function CollectionList({
 }) {
   const router = useRouter();
   const [items, setItems] = useState<CollectionItem[] | null>(null);
+  const [people, setPeople] = useState<Record<string, Person>>({});
   const [error, setError] = useState<string | null>(null);
   const [preview, setPreview] = useState<number | null>(null);
 
   const Load = useCallback(() => {
     setError(null);
-    ApiFetch<CollectionItem[]>(url).then((result) => (result.ok ? setItems(result.body) : setError(ErrorText(result))));
+    ApiFetch<{ items: CollectionItem[]; people: Record<string, Person> }>(url).then((result) => {
+      if (!result.ok) return setError(ErrorText(result));
+      setItems(result.body.items);
+      setPeople(result.body.people);
+    });
   }, [url]);
   useEffect(Load, [Load]);
 
@@ -83,15 +89,10 @@ export function CollectionList({
 
   return (
     <>
-      <Panel className="p-2!">
-        <ul className="flex flex-col divide-y divide-separator">
+      <ListPanel>
           {items.map((item) => (
             <li key={item.key}>
-              {/* biome-ignore lint/a11y/useKeyWithClickEvents: klávesnice jde přes menu ⋮ */}
-              <div
-                className="flex cursor-pointer items-center gap-3 rounded-xl px-3 py-2.5 hover:bg-default/60"
-                onClick={(event) => !(event.target as HTMLElement).closest("button") && Open(item)}
-              >
+              <ClickableRow onOpen={() => Open(item)}>
                 <FileIcon name={item.name} isDir={item.isDir} color={item.color} className="shrink-0 text-[26px]" />
                 <div className="min-w-0 flex-1">
                   <p className="flex min-w-0 items-center gap-1 text-sm font-medium">
@@ -108,6 +109,7 @@ export function CollectionList({
                   {timeLabel} {FormatDate(item.at)}
                   {!item.isDir && <span className="block">{FormatBytes(item.size)}</span>}
                 </span>
+                <PersonLabel person={item.owner ? people[item.owner] : null} className="hidden w-40 text-sm md:flex" />
                 <MoreButton
                   label={`Akce pro ${item.name}`}
                   actions={[
@@ -118,11 +120,10 @@ export function CollectionList({
                   ]}
                   onAction={(id) => Run(item, id)}
                 />
-              </div>
+              </ClickableRow>
             </li>
           ))}
-        </ul>
-      </Panel>
+        </ListPanel>
       <PreviewModal
         entries={previewable}
         index={preview}

@@ -7,14 +7,14 @@ import { AppDialog } from "@/Components/AppDialog";
 import { MoreButton } from "@/Components/Files/ActionMenu";
 import { Icon } from "@/Components/Icon";
 import { PageHeader } from "@/Components/PageHeader";
-import { Panel } from "@/Components/Panel";
 import { PasswordField } from "@/Components/PasswordField";
 import { useUser } from "@/Components/Session";
 import { QuotaField } from "@/Components/QuotaField";
 import { ErrorView, LoadingRows } from "@/Components/StateViews";
-import { UserAvatar } from "@/Components/UserAvatar";
+import { type Person, UserAvatar } from "@/Components/UserAvatar";
 import { ApiFetch, ErrorText } from "@/lib/api";
 import { FormatBytes, FormatDate } from "@/lib/format";
+import { ListPanel } from "@/Components/ListPanel";
 
 interface UserRow {
   id: number;
@@ -23,6 +23,7 @@ interface UserRow {
   createdAt: number;
   quotaBytes: number | null;
   usedBytes: number;
+  person: Person;
 }
 
 type DialogState =
@@ -206,15 +207,15 @@ export default function UsersPage() {
         ) : !users ? (
           <LoadingRows count={3} />
         ) : (
-          <Panel className="p-2!">
-            <ul className="flex flex-col divide-y divide-separator">
+          <ListPanel>
               {users.map((user) => (
                 <li key={user.id} className="flex items-center gap-3 px-3 py-2.5">
-                  <UserAvatar username={user.username} />
+                  <UserAvatar person={user.person} />
                   <div className="min-w-0 flex-1">
                     <p className="truncate text-sm font-medium">
-                      {user.username}
-                      {user.id === me.id && <span className="text-muted"> (ty)</span>}
+                      {user.person.name}
+                      {user.person.name !== user.username && <span className="font-normal text-muted"> · {user.username}</span>}
+                      {user.id === me.id && <span className="font-normal text-muted"> (ty)</span>}
                     </p>
                     <p className="text-xs text-muted tabular-nums">
                       {user.quotaBytes === null
@@ -238,8 +239,7 @@ export default function UsersPage() {
                   />
                 </li>
               ))}
-            </ul>
-          </Panel>
+            </ListPanel>
         )}
 
         <UserDialog

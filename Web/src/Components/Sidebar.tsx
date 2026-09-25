@@ -140,9 +140,9 @@ function SidebarBody({ onNavigate }: { onNavigate?: () => void }) {
             onClick={onNavigate}
             className="flex min-w-0 flex-1 items-center gap-2 rounded-xl px-3 py-2 outline-none hover:bg-default focus-visible:ring-2 focus-visible:ring-focus"
           >
-            <UserAvatar username={user.username} />
+            <UserAvatar person={user} />
             <span className="min-w-0">
-              <span className="block truncate text-sm font-medium">{user.username}</span>
+              <span className="block truncate text-sm font-medium">{user.name}</span>
               <span className="block text-xs text-muted">{user.role === "admin" ? "Administrátor" : "Uživatel"}</span>
             </span>
           </Link>
