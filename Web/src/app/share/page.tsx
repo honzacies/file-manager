@@ -109,6 +109,8 @@ function ShareView() {
           onSelectAll={() => {}}
           handlers={{
             readOnly: true,
+            thumbUrl: (entry) =>
+              `/api/public/shares/${encodeURIComponent(token)}/thumb${Query({ path: JoinPath(path, entry.name), v: Math.round(entry.modified) })}`,
             selected: new Set(),
             focused: null,
             onSelect: () => {},

@@ -455,7 +455,8 @@ export function FileBrowser() {
     actionsFor: (entry) => ActionsFor([entry]),
     onAction: (entry, id) => RunAction(id, [entry]),
     onDropInto: (folder, names) => MoveInto(JoinPath(path, folder), names),
-    thumbUrl: (entry) => `${FileUrl(entry, true)}&thumb=true`,
+    // `v` = čas změny → po přepsání souboru nový náhled, jinak z cache prohlížeče
+    thumbUrl: (entry) => `/api/files/thumb${Query({ path: JoinPath(path, entry.name), all, share, v: Math.round(entry.modified) })}`,
     isOffline: (entry) => !entry.isDir && offline.IsOffline(FileUrl(entry, false)),
     ownerOf: (entry) => (entry.owner ? people[entry.owner] : null),
     readOnly,

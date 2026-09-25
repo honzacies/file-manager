@@ -1,7 +1,7 @@
 "use client";
 
 import { Button, Dropdown, Kbd, Label, Separator } from "@heroui/react";
-import { Fragment, useState } from "react";
+import { Fragment, useEffect, useState } from "react";
 import { FOLDER_COLORS } from "@/lib/format";
 import { Icon } from "../Icon";
 
@@ -100,11 +100,26 @@ export function ContextMenu({
   onAction: (id: string) => void;
   onClose: () => void;
 }) {
-  if (!position || !actions.length) return null;
+  const open = !!position && actions.length > 0;
+
+  // Nemodální popover React Aria nezavře klik do prázdna (fokus jde na body) — zavírat ručně
+  // při stisku myši mimo menu. Pravý klik na jinou položku tak menu zavře a hned otevře nové.
+  useEffect(() => {
+    if (!open) return;
+    const OnPointerDown = (event: PointerEvent) => {
+      if (!(event.target as Element).closest?.('[data-slot="dropdown-popover"]')) onClose();
+    };
+    document.addEventListener("pointerdown", OnPointerDown, true);
+    return () => document.removeEventListener("pointerdown", OnPointerDown, true);
+  }, [open, onClose]);
+
+  if (!position || !open) return null;
   return (
-    <Dropdown key={`${position.x},${position.y}`} isOpen onOpenChange={(open) => !open && onClose()}>
+    <Dropdown key={`${position.x},${position.y}`} isOpen onOpenChange={(isOpen) => !isOpen && onClose()}>
       <Dropdown.Trigger aria-label="Kontextové menu" className="pointer-events-none fixed size-px opacity-0" style={{ left: position.x, top: position.y }} />
-      <Dropdown.Popover placement="bottom start" className="min-w-60">
+      {/* Nemodální: stránka zůstane klikatelná, takže pravý klik na jinou položku rovnou otevře menu u ní
+          (modální popover by zbytek stránky označil jako inert). Zavírá Esc a klik mimo menu. */}
+      <Dropdown.Popover placement="bottom start" className="min-w-60" isNonModal>
         <Items actions={actions} onAction={onAction} close={onClose} />
       </Dropdown.Popover>
     </Dropdown>

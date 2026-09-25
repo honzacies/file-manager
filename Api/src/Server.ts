@@ -14,6 +14,7 @@ import { ShareRoutes } from "./Routes/ShareRoutes.ts";
 import { TrashRoutes } from "./Routes/TrashRoutes.ts";
 import { UserShareRoutes } from "./Routes/UserShareRoutes.ts";
 import { HttpError, PurgeOldTrash } from "./Storage.ts";
+import { PurgeOldThumbs } from "./Thumbs.ts";
 
 // 'unsafe-inline' kvůli inline skriptům Next.js bez nonce.
 const PAGE_CSP = [
@@ -96,6 +97,7 @@ if (import.meta.main) {
   const Housekeeping = () => {
     PurgeExpiredSessions();
     PurgeOldTrash().catch((error) => app.log.error(error));
+    PurgeOldThumbs().catch((error) => app.log.error(error));
   };
   Housekeeping();
   setInterval(Housekeeping, 6 * 3_600_000).unref();

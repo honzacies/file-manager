@@ -6,6 +6,7 @@ import { pipeline } from "node:stream/promises";
 import type { FastifyInstance } from "fastify";
 import { RequireUser } from "../Auth.ts";
 import { PeopleByUsername } from "../People.ts";
+import { GetThumb, ThumbKind } from "../Thumbs.ts";
 import {
   AssertQuota,
   AssertWritable,
@@ -22,6 +23,7 @@ import {
   ScopeProps,
   type ScopeT,
   SendFile,
+  SendThumb,
   StatOrThrow,
   TouchRecent,
   TRASH_DIR,
@@ -81,6 +83,15 @@ export async function FileRoutes(app: FastifyInstance) {
     const result = await SendFile(request, reply, abs, query.inline);
     if (!query.thumb && !request.headers.range) TouchRecent(request.user.id, relToRoot, query.share);
     return result;
+  });
+
+  // Náhled fotky / snímek videa / cover hudby. 404 = náhled není, klient ukáže ikonu.
+  app.get("/files/thumb", { schema: { querystring: PathQuery } }, async (request, reply) => {
+    const query = request.query as PathQueryT;
+    const { abs } = Resolve(ViewFor(request, query), query.path);
+    const thumb = await GetThumb(abs);
+    if (!thumb) throw new HttpError(404, "Náhled není k dispozici.");
+    return SendThumb(reply, thumb);
   });
 
   app.get("/storage", async (request) => {
@@ -150,6 +161,8 @@ export async function FileRoutes(app: FastifyInstance) {
     const final = await UniquePath(targetDir, parts[parts.length - 1]);
     await fs.rename(temp, final);
     TouchRecent(request.user.id, RelToRoot(view, final), query.share);
+    // "Prefetch": náhled se začne dělat hned, ať je hotový, než si ho někdo otevře.
+    if (ThumbKind(final)) GetThumb(final).catch(() => {});
     return { name: path.basename(final) };
   });
 

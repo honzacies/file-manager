@@ -84,6 +84,12 @@ export const KIND_COLOR: Record<FileKind, string> = {
   other: "text-muted",
 };
 
+// Má smysl chtít od serveru náhled (fotka, snímek videa, cover hudby)? SVG ffmpeg neumí.
+export function HasThumb(entry: Pick<Entry, "name" | "isDir">) {
+  const kind = KindOf(entry);
+  return (kind === "image" && Extension(entry.name) !== "svg") || kind === "video" || kind === "audio";
+}
+
 export function CanPreview(entry: Pick<Entry, "name" | "isDir">) {
   const kind = KindOf(entry);
   return kind !== "folder" && kind !== "archive" && kind !== "other";

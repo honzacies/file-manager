@@ -13,6 +13,8 @@ ENV NODE_ENV=production \
     DEFAULT_ROOT_DIR=/cloud \
     LISTEN_HOST=0.0.0.0 \
     PORT=8080
+# ffmpeg = náhledy videí a covery hudby (bez něj appka ukazuje jen ikony)
+RUN apt-get update && apt-get install -y --no-install-recommends ffmpeg && rm -rf /var/lib/apt/lists/*
 WORKDIR /app
 COPY Api/package.json Api/package-lock.json ./
 RUN npm ci --omit=dev --no-audit --no-fund

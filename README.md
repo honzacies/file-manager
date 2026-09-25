@@ -31,7 +31,7 @@ Soubory leží na disku normálně jako `<CLOUD_DIR>/<username>/…`, smazané v
 cd Api && npm i && npm run dev        # API na :8080, data v ./data a ./cloud
 cd Web && npm i && npm run dev        # web na :3000, /api se přeposílá na API (API_URL)
 cd Api && npm run create-admin -- honza   # heslo ze stdin
-cd Api && npm run verify              # bezpečnostní self-check (31 kontrol přes app.inject)
+cd Api && npm run verify              # bezpečnostní self-check (32 kontrol přes app.inject; náhledy potřebují ffmpeg, jinak se přeskočí)
 cd Web && node src/lib/safeRedirect.check.ts   # přesměrování po loginu nevede ven
 ```
 
@@ -47,7 +47,7 @@ cd Web && node src/lib/safeRedirect.check.ts   # přesměrování po loginu neve
 
 ## Vědomě vynecháno
 
-- Miniatury — grid načítá originály s `loading="lazy"`; generovat až bude pomalé.
+- Náhledy fotek, snímky videí a covery hudby dělá ffmpeg (v Docker image), cache `DATA_DIR/thumbs` (úklid po 90 dnech). Bez ffmpeg jen ikony.
 - Verze souborů, zástupci, pracovní prostory.
 - Offline a instalace jako aplikace fungují jen přes HTTPS (`tailscale serve`), na `http://IP:8080` je prohlížeč nedovolí.
 - Kvóta hlídá jen upload do vlastní složky: koš se nepočítá a admin v „Všech souborech“ ji obchází.

@@ -431,6 +431,36 @@ try {
     assert.ok(limited);
   });
 
+  await Check("náhledy: video, cover hudby, bez coveru 404, nejde ven ze složky, veřejné sdílení", async () => {
+    const { spawnSync } = await import("node:child_process");
+    const ffmpeg = (args: string[]) => spawnSync(process.env.FFMPEG_PATH ?? "ffmpeg", ["-v", "error", "-y", ...args]).status === 0;
+    if (!ffmpeg(["-version"])) {
+      console.log("  (ffmpeg chybí — náhledy přeskočeny)");
+      return;
+    }
+    const at = (name: string) => path.join(aliceHome, name);
+    assert.ok(ffmpeg(["-f", "lavfi", "-i", "testsrc=size=640x360:duration=1", "-pix_fmt", "yuv420p", at("klip.mp4")]));
+    assert.ok(ffmpeg(["-f", "lavfi", "-i", "color=c=red:s=300x300", "-frames:v", "1", at("cover.png")]));
+    assert.ok(ffmpeg(["-f", "lavfi", "-i", "sine=d=1", "-i", at("cover.png"), "-map", "0", "-map", "1", "-c:a", "libmp3lame", "-c:v", "mjpeg", "-disposition:v", "attached_pic", at("pisen.mp3")]));
+    assert.ok(ffmpeg(["-f", "lavfi", "-i", "sine=d=1", "-c:a", "libmp3lame", at("bez-coveru.mp3")]));
+
+    const thumb = (p: string, headers = alice) => app.inject({ url: `/api/files/thumb?path=${encodeURIComponent(p)}`, headers });
+    for (const name of ["klip.mp4", "pisen.mp3", "cover.png"]) {
+      const response = await thumb(name);
+      assert.equal(response.statusCode, 200, name);
+      assert.equal(response.headers["content-type"], "image/webp", name);
+      assert.equal(response.rawPayload.subarray(8, 12).toString(), "WEBP", name);
+    }
+    assert.equal((await thumb("bez-coveru.mp3")).statusCode, 404);
+    assert.equal((await thumb("novy.txt")).statusCode, 404);
+    assert.equal((await thumb("../bob/x.txt", bob2)).statusCode, 404);
+    assert.equal((await app.inject({ url: `/api/files/thumb?path=klip.mp4` })).statusCode, 401);
+
+    const { token } = (await app.inject({ method: "POST", url: "/api/shares", headers: alice, payload: { path: "klip.mp4" } })).json();
+    assert.equal((await app.inject({ url: `/api/public/shares/${token}/thumb` })).statusCode, 200);
+    assert.equal((await app.inject({ url: `/api/public/shares/${token}/thumb?path=../pisen.mp3` })).statusCode, 404);
+  });
+
   // ---- Safe Test My Code 2026-09-25: regrese nálezů --------------------------------
 
   await Check("kořen cloudu nesmí obsahovat databázi (jinak by šla stáhnout cloud.db)", async () => {

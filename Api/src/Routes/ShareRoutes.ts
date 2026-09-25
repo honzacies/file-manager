@@ -4,7 +4,8 @@ import type { FastifyInstance } from "fastify";
 import { RequireUser } from "../Auth.ts";
 import { Db } from "../Db.ts";
 import { PersonById } from "../People.ts";
-import { GetRootDir, GetView, HttpError, ListDir, RelFromRoot, Resolve, SendFile, StatOrThrow } from "../Storage.ts";
+import { GetThumb } from "../Thumbs.ts";
+import { GetRootDir, GetView, HttpError, ListDir, RelFromRoot, Resolve, SendFile, SendThumb, StatOrThrow } from "../Storage.ts";
 
 interface ShareRow {
   token: string;
@@ -116,6 +117,13 @@ export async function ShareRoutes(app: FastifyInstance) {
       // Barvy složek ano, hvězdičky ne — ty jsou osobní.
       entries: stat.isDirectory() ? await ListDir(abs, false, RelFromRoot(GetRootDir(), abs)) : [],
     };
+  });
+
+  app.get("/public/shares/:token/thumb", { config: PublicLimit, schema: { querystring: PublicQuery } }, async (request, reply) => {
+    const share = FindShare((request.params as { token: string }).token);
+    const thumb = await GetThumb(ResolveInShare(share, (request.query as { path: string }).path).abs);
+    if (!thumb) throw new HttpError(404, "Náhled není k dispozici.");
+    return SendThumb(reply, thumb);
   });
 
   app.get("/public/shares/:token/download", { config: PublicLimit, schema: { querystring: PublicQuery } }, async (request, reply) => {

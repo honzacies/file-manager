@@ -317,6 +317,15 @@ export function ExtensionOf(name: string) {
   return ext || name.toLowerCase().replace(/^\./, "");
 }
 
+// Hotový náhled (WebP). Cesta v URL mění `v` (čas změny souboru), takže se smí cachovat.
+export function SendThumb(reply: FastifyReply, file: string) {
+  return reply
+    .header("Content-Type", "image/webp")
+    .header("X-Content-Type-Options", "nosniff")
+    .header("Cache-Control", "private, max-age=604800")
+    .send(createReadStream(file));
+}
+
 export async function SendFile(request: FastifyRequest, reply: FastifyReply, abs: string, inline: boolean) {
   const stat = await StatOrThrow(abs);
   if (stat.isDirectory()) throw new HttpError(400, "Složku zatím nejde stáhnout, jen jednotlivé soubory.");

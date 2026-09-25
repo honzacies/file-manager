@@ -1,7 +1,8 @@
 "use client";
 
 import { Checkbox } from "@heroui/react";
-import { type Entry, FormatBytes, FormatDate, KindOf } from "@/lib/format";
+import { type ReactNode, useState } from "react";
+import { type Entry, FormatBytes, FormatDate, HasThumb, KindOf } from "@/lib/format";
 import { FileIcon } from "../FileIcon";
 import { Icon } from "../Icon";
 import { type Person, PersonLabel, UserAvatar } from "../UserAvatar";
@@ -40,11 +41,19 @@ export interface ItemHandlers {
   onAction: (entry: Entry, id: string) => void;
   // přetažení položek (názvy) do složky
   onDropInto: (folder: string, names: string[]) => void;
+  // náhled (fotka / snímek videa / cover hudby); bez něj se ukazují ikony
   thumbUrl?: (entry: Entry) => string;
   isOffline?: (entry: Entry) => boolean;
   // vlastník položky (jméno + avatar); bez něj se sloupec Vlastník nezobrazí (veřejné sdílení)
   ownerOf?: (entry: Entry) => Person | null | undefined;
   readOnly?: boolean;
+}
+
+// Náhled od serveru, dokud se nepodaří načíst (404 = náhled není) → ikona typu jako záloha.
+function Cover({ url, className, fallback }: { url?: string; className: string; fallback: ReactNode }) {
+  const [failed, setFailed] = useState(false);
+  if (!url || failed) return fallback;
+  return <img src={url} alt="" loading="lazy" decoding="async" draggable={false} onError={() => setFailed(true)} className={className} />;
 }
 
 // Název s odznaky. Ve výsledcích hledání je `name` cesta ("2024/leto.jpg") → složka šedě před názvem.
@@ -136,9 +145,12 @@ function SelectBox({ entry, handlers }: { entry: Entry; handlers: ItemHandlers }
         isSelected={handlers.selected.has(entry.name)}
         onChange={() => handlers.onSelect(entry.name, "toggle")}
       >
-        <Checkbox.Control>
-          <Checkbox.Indicator />
-        </Checkbox.Control>
+        {/* Content = klikací label se skrytým inputem; bez něj checkbox na klik nereaguje */}
+        <Checkbox.Content>
+          <Checkbox.Control>
+            <Checkbox.Indicator />
+          </Checkbox.Control>
+        </Checkbox.Content>
       </Checkbox>
     </span>
   );
@@ -156,7 +168,12 @@ function ListRow({ entry, handlers }: { entry: Entry; handlers: ItemHandlers }) 
     >
       {!handlers.readOnly && <SelectBox entry={entry} handlers={handlers} />}
       <div className="flex min-w-0 items-center gap-3">
-        <FileIcon name={entry.name} isDir={entry.isDir} color={entry.color} className="shrink-0 text-[24px]" />
+        <Cover
+          key={handlers.thumbUrl?.(entry)}
+          url={HasThumb(entry) ? handlers.thumbUrl?.(entry) : undefined}
+          className="size-7 shrink-0 rounded-md bg-surface-secondary object-cover"
+          fallback={<FileIcon name={entry.name} isDir={entry.isDir} color={entry.color} className="shrink-0 text-[24px]" />}
+        />
         <div className="min-w-0">
           <NameLabel entry={entry} handlers={handlers} className="text-sm" />
           {/* na mobilu metadata pod názvem místo sloupců */}
@@ -178,7 +195,7 @@ function ListRow({ entry, handlers }: { entry: Entry; handlers: ItemHandlers }) 
 function GridTile({ entry, handlers }: { entry: Entry; handlers: ItemHandlers }) {
   const props = useItemProps(entry, handlers);
   const selected = props["aria-selected"];
-  const showThumb = handlers.thumbUrl && KindOf(entry) === "image";
+  const kind = KindOf(entry);
   return (
     <div
       {...props}
@@ -191,12 +208,17 @@ function GridTile({ entry, handlers }: { entry: Entry; handlers: ItemHandlers })
           <UserAvatar person={handlers.ownerOf(entry)} className="size-7! text-[11px]! ring-2 ring-surface" />
         </div>
       )}
-      <div className="grid aspect-4/3 place-items-center overflow-hidden bg-surface-secondary">
-        {showThumb ? (
-          // ponytail: náhled = originál s loading="lazy"; generovat miniatury, až to bude na mobilních datech pomalé
-          <img src={handlers.thumbUrl?.(entry)} alt="" loading="lazy" draggable={false} className="h-full w-full object-cover" />
-        ) : (
-          <FileIcon name={entry.name} isDir={entry.isDir} color={entry.color} className="text-[48px]" />
+      <div className="relative grid aspect-4/3 place-items-center overflow-hidden bg-surface-secondary">
+        <Cover
+          key={handlers.thumbUrl?.(entry)}
+          url={HasThumb(entry) ? handlers.thumbUrl?.(entry) : undefined}
+          className="h-full w-full object-cover"
+          fallback={<FileIcon name={entry.name} isDir={entry.isDir} color={entry.color} className="text-[48px]" />}
+        />
+        {kind === "video" && (
+          <span className="pointer-events-none absolute bottom-2 left-2 grid size-7 place-items-center rounded-full bg-black/60 text-white backdrop-blur">
+            <Icon name="play_arrow" filled className="text-[18px]" />
+          </span>
         )}
       </div>
       <div className="flex items-center gap-1 py-1.5 pr-1 pl-3">
@@ -244,9 +266,11 @@ export function FileItems({
       <div className={`sticky top-14 z-10 grid ${Columns(handlers)} items-center gap-3 border-b border-separator bg-background px-2 py-2 lg:top-0`}>
         {!handlers.readOnly && (
           <Checkbox aria-label="Označit vše" isSelected={allSelected} isIndeterminate={!allSelected && handlers.selected.size > 0} onChange={onSelectAll}>
-            <Checkbox.Control>
-              <Checkbox.Indicator />
-            </Checkbox.Control>
+            <Checkbox.Content>
+              <Checkbox.Control>
+                <Checkbox.Indicator />
+              </Checkbox.Control>
+            </Checkbox.Content>
           </Checkbox>
         )}
         <SortHeader label="Název" sortKey="name" sort={sort} onSort={onSort} />
