@@ -12,7 +12,7 @@ import { ApiFetch, ErrorText } from "@/lib/api";
 import { CopyText, ShareUrl } from "@/lib/clipboard";
 import { FormatDate } from "@/lib/format";
 
-interface Share {
+interface LinkShare {
   token: string;
   name: string;
   path: string;
@@ -21,19 +21,46 @@ interface Share {
   createdAt: number;
 }
 
+interface UserShare {
+  id: number;
+  name: string;
+  path: string;
+  recipient: string;
+  isDir: boolean;
+  canWrite: boolean;
+  missing: boolean;
+  createdAt: number;
+}
+
+type Revoke = { kind: "link"; share: LinkShare } | { kind: "user"; share: UserShare } | null;
+
+function SectionTitle({ icon, title, description }: { icon: string; title: string; description: string }) {
+  return (
+    <div className="mb-3 flex items-start gap-2">
+      <Icon name={icon} className="mt-0.5 text-[20px] text-accent" />
+      <div>
+        <h2 className="font-semibold">{title}</h2>
+        <p className="text-sm text-muted">{description}</p>
+      </div>
+    </div>
+  );
+}
+
 export default function SharesPage() {
-  const [shares, setShares] = useState<Share[] | null>(null);
+  const [links, setLinks] = useState<LinkShare[] | null>(null);
+  const [users, setUsers] = useState<UserShare[] | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [revoke, setRevoke] = useState<Share | null>(null);
+  const [revoke, setRevoke] = useState<Revoke>(null);
   const [pending, setPending] = useState(false);
 
   const Load = useCallback(() => {
     setError(null);
-    ApiFetch<Share[]>("/api/shares").then((result) => (result.ok ? setShares(result.body) : setError(ErrorText(result))));
+    ApiFetch<LinkShare[]>("/api/shares").then((result) => (result.ok ? setLinks(result.body) : setError(ErrorText(result))));
+    ApiFetch<UserShare[]>("/api/user-shares/outgoing").then((result) => (result.ok ? setUsers(result.body) : setError(ErrorText(result))));
   }, []);
   useEffect(Load, [Load]);
 
-  async function Copy(share: Share) {
+  async function Copy(share: LinkShare) {
     if (await CopyText(ShareUrl(share.token))) toast.success("Odkaz zkopírován");
     else toast.danger("Kopírování se nepovedlo.");
   }
@@ -41,68 +68,129 @@ export default function SharesPage() {
   async function Revoke() {
     if (!revoke) return;
     setPending(true);
-    const result = await ApiFetch(`/api/shares/${revoke.token}`, "DELETE");
+    const result =
+      revoke.kind === "link"
+        ? await ApiFetch(`/api/shares/${revoke.share.token}`, "DELETE")
+        : await ApiFetch(`/api/user-shares/${revoke.share.id}`, "DELETE");
     setPending(false);
     setRevoke(null);
-    if (result.ok) toast.success("Odkaz zrušen");
+    if (result.ok) toast.success(revoke.kind === "link" ? "Odkaz zrušen" : `${revoke.share.recipient} už k „${revoke.share.name}“ nemá přístup`);
     else toast.danger(ErrorText(result));
     Load();
   }
 
-  return (
-    <div className="flex flex-col gap-6">
-      <PageHeader title="Sdílené odkazy" description="Odkazy, přes které si kdokoliv stáhne tvoje soubory bez přihlášení." />
+  if (error) return <ErrorView message={error} onRetry={Load} />;
 
-      {error ? (
-        <ErrorView message={error} onRetry={Load} />
-      ) : !shares ? (
-        <LoadingRows />
-      ) : shares.length === 0 ? (
-        <EmptyView icon="link" title="Zatím nic nesdílíš">
-          V souborech klikni pravým tlačítkem na soubor nebo složku a vyber <b>Sdílet odkazem</b>.
-        </EmptyView>
-      ) : (
-        <Panel className="p-2!">
-          <ul className="flex flex-col divide-y divide-separator">
-            {shares.map((share) => {
-              const expired = share.expiresAt !== null && share.expiresAt < Date.now();
-              return (
-                <li key={share.token} className="flex flex-wrap items-center gap-3 px-3 py-2.5 sm:flex-nowrap">
+  return (
+    <div className="flex flex-col gap-8">
+      <PageHeader title="Moje sdílení" description="Co jsi nasdílel ostatním uživatelům a přes veřejné odkazy." />
+
+      <section>
+        <SectionTitle icon="group" title="S uživateli" description="Uvidí to v sekci Sdíleno se mnou. Oprávnění změníš v souborech přes Sdílet s uživateli." />
+        {!users ? (
+          <LoadingRows count={2} />
+        ) : users.length === 0 ? (
+          <Panel compact>
+            <p className="text-sm text-muted">
+              Zatím s nikým nesdílíš. V souborech klikni pravým tlačítkem a vyber <b>Sdílet s uživateli</b>.
+            </p>
+          </Panel>
+        ) : (
+          <Panel className="p-2!">
+            <ul className="flex flex-col divide-y divide-separator">
+              {users.map((share) => (
+                <li key={share.id} className="flex flex-wrap items-center gap-3 px-3 py-2.5 sm:flex-nowrap">
                   <FileIcon name={share.name} isDir={share.isDir} className="shrink-0 text-[24px]" />
                   <div className="min-w-0 flex-1">
-                    <p className="truncate text-sm font-medium">{share.name}</p>
+                    <p className="truncate text-sm font-medium">
+                      {share.name} <span className="font-normal text-muted">→ {share.recipient}</span>
+                    </p>
                     <p className="truncate text-xs text-muted">
-                      /{share.path} · vytvořeno {FormatDate(share.createdAt)}
+                      /{share.path} · od {FormatDate(share.createdAt)}
                     </p>
                   </div>
-                  <Chip size="sm" color={expired ? "danger" : share.expiresAt ? "default" : "accent"} variant="soft">
-                    {expired ? "Vypršel" : share.expiresAt ? `Do ${FormatDate(share.expiresAt)}` : "Bez omezení"}
+                  <Chip size="sm" variant="soft" color={share.missing ? "danger" : share.canWrite ? "accent" : "default"}>
+                    {share.missing ? "V koši" : share.canWrite ? "Může upravovat" : "Může zobrazit"}
                   </Chip>
-                  <div className="flex gap-1">
-                    <Button size="sm" variant="secondary" onPress={() => Copy(share)} isDisabled={expired}>
-                      <Icon name="content_copy" className="text-[16px]" />
-                      Kopírovat
-                    </Button>
-                    <Button size="sm" isIconOnly variant="ghost" aria-label={`Zrušit odkaz na ${share.name}`} onPress={() => setRevoke(share)} className="text-danger!">
-                      <Icon name="link_off" className="text-[18px]" />
-                    </Button>
-                  </div>
+                  <Button
+                    size="sm"
+                    isIconOnly
+                    variant="ghost"
+                    aria-label={`Zrušit sdílení ${share.name} s ${share.recipient}`}
+                    onPress={() => setRevoke({ kind: "user", share })}
+                    className="text-danger!"
+                  >
+                    <Icon name="person_remove" className="text-[18px]" />
+                  </Button>
                 </li>
-              );
-            })}
-          </ul>
-        </Panel>
-      )}
+              ))}
+            </ul>
+          </Panel>
+        )}
+      </section>
+
+      <section>
+        <SectionTitle icon="link" title="Veřejné odkazy" description="Kdokoliv s odkazem si soubory stáhne bez přihlášení." />
+        {!links ? (
+          <LoadingRows count={2} />
+        ) : links.length === 0 ? (
+          <EmptyView icon="link" title="Žádné odkazy">
+            V souborech klikni pravým tlačítkem na soubor nebo složku a vyber <b>Sdílet odkazem</b>.
+          </EmptyView>
+        ) : (
+          <Panel className="p-2!">
+            <ul className="flex flex-col divide-y divide-separator">
+              {links.map((share) => {
+                const expired = share.expiresAt !== null && share.expiresAt < Date.now();
+                return (
+                  <li key={share.token} className="flex flex-wrap items-center gap-3 px-3 py-2.5 sm:flex-nowrap">
+                    <FileIcon name={share.name} isDir={share.isDir} className="shrink-0 text-[24px]" />
+                    <div className="min-w-0 flex-1">
+                      <p className="truncate text-sm font-medium">{share.name}</p>
+                      <p className="truncate text-xs text-muted">
+                        /{share.path} · vytvořeno {FormatDate(share.createdAt)}
+                      </p>
+                    </div>
+                    <Chip size="sm" color={expired ? "danger" : share.expiresAt ? "default" : "accent"} variant="soft">
+                      {expired ? "Vypršel" : share.expiresAt ? `Do ${FormatDate(share.expiresAt)}` : "Bez omezení"}
+                    </Chip>
+                    <div className="flex gap-1">
+                      <Button size="sm" variant="secondary" onPress={() => Copy(share)} isDisabled={expired}>
+                        <Icon name="content_copy" className="text-[16px]" />
+                        Kopírovat
+                      </Button>
+                      <Button
+                        size="sm"
+                        isIconOnly
+                        variant="ghost"
+                        aria-label={`Zrušit odkaz na ${share.name}`}
+                        onPress={() => setRevoke({ kind: "link", share })}
+                        className="text-danger!"
+                      >
+                        <Icon name="link_off" className="text-[18px]" />
+                      </Button>
+                    </div>
+                  </li>
+                );
+              })}
+            </ul>
+          </Panel>
+        )}
+      </section>
 
       <ConfirmDialog
         isOpen={!!revoke}
         onOpenChange={(open) => !open && setRevoke(null)}
-        heading={`Zrušit odkaz na „${revoke?.name ?? ""}“?`}
-        confirmLabel="Zrušit odkaz"
+        heading={
+          revoke?.kind === "user" ? `Přestat sdílet „${revoke.share.name}“ s ${revoke.share.recipient}?` : `Zrušit odkaz na „${revoke?.share.name ?? ""}“?`
+        }
+        confirmLabel={revoke?.kind === "user" ? "Přestat sdílet" : "Zrušit odkaz"}
         isPending={pending}
         onConfirm={Revoke}
       >
-        Kdo odkaz má, už se k souboru nedostane. Soubor samotný zůstane.
+        {revoke?.kind === "user"
+          ? "Ztratí k položce přístup a zmizí mu ze Sdíleno se mnou. Soubory samotné zůstanou."
+          : "Kdo odkaz má, už se k souboru nedostane. Soubor samotný zůstane."}
       </ConfirmDialog>
     </div>
   );

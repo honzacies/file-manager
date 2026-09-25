@@ -10,6 +10,7 @@ import { AuthRoutes } from "./Routes/AuthRoutes.ts";
 import { FileRoutes } from "./Routes/FileRoutes.ts";
 import { ShareRoutes } from "./Routes/ShareRoutes.ts";
 import { TrashRoutes } from "./Routes/TrashRoutes.ts";
+import { UserShareRoutes } from "./Routes/UserShareRoutes.ts";
 import { HttpError, PurgeOldTrash } from "./Storage.ts";
 
 // 'unsafe-inline' kvůli inline skriptům Next.js bez nonce.
@@ -64,6 +65,7 @@ export async function BuildApp() {
       await api.register(FileRoutes);
       await api.register(TrashRoutes);
       await api.register(ShareRoutes);
+      await api.register(UserShareRoutes);
       await api.register(AdminRoutes);
       api.setNotFoundHandler((_request, reply) => reply.code(404).send({ error: "Neznámý endpoint." }));
     },

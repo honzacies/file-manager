@@ -16,6 +16,13 @@ interface UploadItem {
   error?: string;
 }
 
+// Kam nahrávat: cesta + rozsah (admin "Všechny soubory" nebo cizí sdílení se zápisem).
+export interface UploadTarget {
+  path: string;
+  all: boolean;
+  share?: number;
+}
+
 export interface UploadRequest {
   file: File;
   // cesta uvnitř nahrávané složky ("Fotky/a.jpg"), u samotných souborů jen název
@@ -23,7 +30,7 @@ export interface UploadRequest {
 }
 
 interface UploadContextValue {
-  Enqueue: (files: UploadRequest[], target: { path: string; all: boolean }) => void;
+  Enqueue: (files: UploadRequest[], target: UploadTarget) => void;
   // zvýší se po každém dokončeném souboru — seznam souborů se podle toho obnoví
   version: number;
 }
@@ -59,11 +66,11 @@ export function UploadProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const Enqueue = useCallback(
-    (files: UploadRequest[], target: { path: string; all: boolean }) => {
+    (files: UploadRequest[], target: UploadTarget) => {
       const jobs = files.map((request) => ({
         id: nextId.current++,
         request,
-        url: `/api/files/upload${Query({ path: target.path, all: target.all, relative: request.relative })}`,
+        url: `/api/files/upload${Query({ path: target.path, all: target.all, share: target.share, relative: request.relative })}`,
       }));
       queue.current.push(...jobs);
       setItems((list) => [

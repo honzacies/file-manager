@@ -8,6 +8,7 @@ import { ApiFetch } from "@/lib/api";
 import { FormatBytes } from "@/lib/format";
 import { Brand } from "./Brand";
 import { Icon } from "./Icon";
+import { NotificationBell } from "./Notifications";
 import { useUser } from "./Session";
 import { ThemeToggle } from "./ThemeToggle";
 import { useUploads } from "./Uploads";
@@ -23,8 +24,14 @@ interface NavItem {
 
 function NavLink({ item, onNavigate }: { item: NavItem; onNavigate?: () => void }) {
   const pathname = usePathname();
-  const all = useSearchParams().get("all") === "1";
-  const active = pathname === item.href && (pathname !== "/files/" || all === !!item.all);
+  const params = useSearchParams();
+  const all = params.get("all") === "1";
+  const inShare = pathname === "/files/" && params.has("share");
+  // Procházení cizí sdílené složky (/files/?share=…) patří pod "Sdíleno se mnou", ne pod "Moje soubory".
+  const active =
+    item.href === "/shared/"
+      ? pathname === "/shared/" || inShare
+      : pathname === item.href && (pathname !== "/files/" || (!inShare && all === !!item.all));
   return (
     <Link
       href={item.href + (item.all ? "?all=1" : "")}
@@ -86,7 +93,8 @@ function SidebarBody({ onNavigate }: { onNavigate?: () => void }) {
   const main: NavItem[] = [
     { href: "/files/", label: "Moje soubory", icon: "folder" },
     ...(user.role === "admin" ? [{ href: "/files/", label: "Všechny soubory", icon: "folder_supervised", all: true }] : []),
-    { href: "/shares/", label: "Sdílené odkazy", icon: "link" },
+    { href: "/shared/", label: "Sdíleno se mnou", icon: "folder_shared" },
+    { href: "/shares/", label: "Moje sdílení", icon: "share" },
     { href: "/trash/", label: "Koš", icon: "delete" },
   ];
   const admin: NavItem[] = [
@@ -96,8 +104,10 @@ function SidebarBody({ onNavigate }: { onNavigate?: () => void }) {
 
   return (
     <div className="flex h-full flex-col gap-6">
-      <div className="px-1">
+      <div className="flex items-center justify-between gap-2 px-1">
         <Brand />
+        {/* V Draweru (mobil) je zvoneček v horní liště, tady by byl dvakrát. */}
+        {!onNavigate && <NotificationBell />}
       </div>
       <nav aria-label="Hlavní menu" className="flex flex-col gap-0.5">
         {main.map((item) => (
@@ -153,6 +163,9 @@ export function Sidebar() {
           <Icon name="menu" className="text-[22px]" />
         </Button>
         <Brand />
+        <div className="ml-auto">
+          <NotificationBell />
+        </div>
       </header>
 
       <Drawer.Backdrop isOpen={open} onOpenChange={setOpen}>

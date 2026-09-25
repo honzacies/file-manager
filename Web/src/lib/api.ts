@@ -22,7 +22,7 @@ export function ErrorText(result: { status: number; body: { error?: string } | n
   return result.body?.error ?? "Něco se pokazilo.";
 }
 
-export function Query(params: Record<string, string | boolean | undefined>) {
+export function Query(params: Record<string, string | number | boolean | undefined>) {
   const search = new URLSearchParams();
   for (const [key, value] of Object.entries(params)) {
     if (value !== undefined && value !== false && value !== "") search.set(key, String(value));

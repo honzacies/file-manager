@@ -50,6 +50,27 @@ Db.exec(`
     expires_at INTEGER,
     created_at INTEGER NOT NULL
   );
+
+  -- Sdílení s konkrétním uživatelem. path je relativní ke kořeni cloudu.
+  CREATE TABLE IF NOT EXISTS user_shares (
+    id           INTEGER PRIMARY KEY,
+    owner_id     INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    recipient_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    path         TEXT NOT NULL,
+    is_dir       INTEGER NOT NULL,
+    can_write    INTEGER NOT NULL,
+    created_at   INTEGER NOT NULL,
+    UNIQUE (recipient_id, path)
+  );
+
+  CREATE TABLE IF NOT EXISTS notifications (
+    id         INTEGER PRIMARY KEY,
+    user_id    INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    text       TEXT NOT NULL,
+    share_id   INTEGER REFERENCES user_shares(id) ON DELETE CASCADE,
+    created_at INTEGER NOT NULL,
+    read_at    INTEGER
+  );
 `);
 
 // Migrace: sloupec přidaný po první verzi. NULL = bez limitu.

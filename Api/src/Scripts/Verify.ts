@@ -228,6 +228,97 @@ try {
     assert.ok(listed.find((u: { username: string }) => u.username === "alice").usedBytes >= 2300);
   });
 
+  // Bob má po testu resetu hesla nové heslo a byl odhlášen.
+  const bobLogin = await app.inject({ method: "POST", url: "/api/auth/login", payload: { username: "bob", password: "novehesl0" } });
+  const bob2 = { cookie: `sid=${bobLogin.cookies.find((c) => c.name === "sid")?.value}` };
+  const bobId = (Db.prepare("SELECT id FROM users WHERE username = 'bob'").get() as { id: number }).id;
+  const aliceHome = path.join(temp, "cloud2", "alice");
+  let shareId = 0;
+
+  await Check("sdílení s uživatelem: notifikace, čtení, zákaz zápisu, nejde ven, cizí nic nevidí", async () => {
+    await app.inject({ method: "POST", url: "/api/files/folder", headers: alice, payload: { name: "Sdilene" } });
+    await Upload(alice, "Sdilene", "doc.txt", "sdileny obsah");
+    const created = await app.inject({ method: "POST", url: "/api/user-shares", headers: alice, payload: { path: "Sdilene", recipientIds: [bobId] } });
+    assert.equal(created.json().added, 1);
+
+    const notifications = (await app.inject({ url: "/api/notifications", headers: bob2 })).json();
+    assert.equal(notifications.unread, 1);
+    assert.match(notifications.items[0].text, /alice/);
+    assert.equal((await app.inject({ url: "/api/notifications", headers: admin })).json().unread, 0);
+
+    const incoming = (await app.inject({ url: "/api/user-shares/incoming", headers: bob2 })).json();
+    assert.equal(incoming.length, 1);
+    shareId = incoming[0].id;
+
+    const list = (await app.inject({ url: `/api/files?share=${shareId}`, headers: bob2 })).json();
+    assert.equal(list.readOnly, true);
+    assert.deepEqual(list.entries.map((e: { name: string }) => e.name), ["doc.txt"]);
+    assert.equal((await app.inject({ url: `/api/files/download?share=${shareId}&path=doc.txt`, headers: bob2 })).body, "sdileny obsah");
+
+    assert.equal((await Upload(bob2, "", "x.txt", "x", `&share=${shareId}`)).statusCode, 403);
+    assert.ok(!existsSync(path.join(aliceHome, "Sdilene", "x.txt")));
+    const del = await app.inject({ method: "POST", url: "/api/files/delete", headers: bob2, payload: { paths: ["doc.txt"], share: shareId } });
+    assert.equal(del.statusCode, 403);
+
+    for (const p of ["../", "../../", "..\\novy.txt"]) {
+      const escape = await app.inject({ url: `/api/files?share=${shareId}&path=${encodeURIComponent(p)}`, headers: bob2 });
+      assert.ok(!escape.body.includes("novy.txt"), `list ${p}`);
+    }
+    const escapeDownload = await app.inject({ url: `/api/files/download?share=${shareId}&path=${encodeURIComponent("../novy.txt")}`, headers: bob2 });
+    assert.notEqual(escapeDownload.statusCode, 200);
+
+    // Admin není příjemce — sdílení pro něj neexistuje.
+    assert.equal((await app.inject({ url: `/api/files?share=${shareId}`, headers: admin })).statusCode, 404);
+    assert.equal((await app.inject({ method: "PATCH", url: `/api/user-shares/${shareId}`, headers: bob2, payload: { canWrite: true } })).statusCode, 404);
+  });
+
+  await Check("sdílení se zápisem: příjemce nahrává, kvóta i koš patří vlastníkovi", async () => {
+    assert.equal((await app.inject({ method: "PATCH", url: `/api/user-shares/${shareId}`, headers: alice, payload: { canWrite: true } })).statusCode, 200);
+    assert.equal((await Upload(bob2, "", "odbob.txt", "b", `&share=${shareId}`)).statusCode, 200);
+    assert.ok(existsSync(path.join(aliceHome, "Sdilene", "odbob.txt")));
+
+    const aliceId = (Db.prepare("SELECT id FROM users WHERE username = 'alice'").get() as { id: number }).id;
+    await app.inject({ method: "PATCH", url: `/api/admin/users/${aliceId}`, headers: admin, payload: { quotaBytes: 10 } });
+    assert.equal((await Upload(bob2, "", "velky.txt", "x".repeat(500), `&share=${shareId}`)).statusCode, 413);
+    await app.inject({ method: "PATCH", url: `/api/admin/users/${aliceId}`, headers: admin, payload: { quotaBytes: null } });
+
+    await app.inject({ method: "POST", url: "/api/files/delete", headers: bob2, payload: { paths: ["odbob.txt"], share: shareId } });
+    const aliceTrash = (await app.inject({ url: "/api/trash", headers: alice })).json().items;
+    assert.ok(aliceTrash.some((item: { name: string }) => item.name === "odbob.txt"));
+  });
+
+  await Check("přejmenování a přesun posune sdílení s uživatelem i odkaz", async () => {
+    const { token } = (await app.inject({ method: "POST", url: "/api/shares", headers: alice, payload: { path: "Sdilene" } })).json();
+    const stillWorks = async () => {
+      assert.equal((await app.inject({ url: `/api/files/download?share=${shareId}&path=doc.txt`, headers: bob2 })).body, "sdileny obsah");
+      assert.equal((await app.inject({ url: `/api/public/shares/${token}/download?path=doc.txt` })).body, "sdileny obsah");
+    };
+    await app.inject({ method: "POST", url: "/api/files/rename", headers: alice, payload: { path: "Sdilene", name: "Spolecne" } });
+    await stillWorks();
+    await app.inject({ method: "POST", url: "/api/files/folder", headers: alice, payload: { name: "Archiv" } });
+    await app.inject({ method: "POST", url: "/api/files/move", headers: alice, payload: { paths: ["Spolecne"], destination: "Archiv" } });
+    await stillWorks();
+    const outgoing = (await app.inject({ url: "/api/user-shares/outgoing", headers: alice })).json();
+    assert.equal(outgoing[0].path, "Archiv/Spolecne");
+  });
+
+  await Check("sdílený soubor: jde stáhnout, sourozenci ne, zápis nikdy", async () => {
+    await app.inject({ method: "POST", url: "/api/user-shares", headers: alice, payload: { path: "novy.txt", recipientIds: [bobId], canWrite: true } });
+    const file = (await app.inject({ url: "/api/user-shares/incoming", headers: bob2 })).json().find((s: { name: string }) => s.name === "novy.txt");
+    assert.equal(file.canWrite, false);
+    assert.equal((await app.inject({ url: `/api/files/download?share=${file.id}`, headers: bob2 })).body, "n");
+    assert.notEqual((await app.inject({ url: `/api/files/download?share=${file.id}&path=maly.bin`, headers: bob2 })).statusCode, 200);
+    assert.equal((await Upload(bob2, "", "y.txt", "y", `&share=${file.id}`)).statusCode, 403);
+  });
+
+  await Check("zrušení sdílení: příjemce ztratí přístup", async () => {
+    assert.equal((await app.inject({ method: "DELETE", url: `/api/user-shares/${shareId}`, headers: admin })).statusCode, 404);
+    assert.equal((await app.inject({ method: "DELETE", url: `/api/user-shares/${shareId}`, headers: alice })).statusCode, 200);
+    assert.equal((await app.inject({ url: `/api/files?share=${shareId}`, headers: bob2 })).statusCode, 404);
+    const incoming = (await app.inject({ url: "/api/user-shares/incoming", headers: bob2 })).json();
+    assert.ok(!incoming.some((s: { id: number }) => s.id === shareId));
+  });
+
   await Check("rate limit na přihlášení", async () => {
     let limited = false;
     for (let i = 0; i < 15; i++) {

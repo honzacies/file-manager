@@ -67,7 +67,7 @@ export async function ShareRoutes(app: FastifyInstance) {
       },
       async (request) => {
         const body = request.body as { path: string; all: boolean; expiresInDays: number | null };
-        const { abs, rel, relToRoot } = Resolve(GetView(request.user, body.all), body.path);
+        const { abs, rel, relToRoot } = Resolve(GetView(request.user, { all: body.all }), body.path);
         if (!rel) throw new HttpError(400, "Celou domovskou složku sdílet nejde, vyber konkrétní položku.");
         const stat = await StatOrThrow(abs);
         const token = randomBytes(16).toString("base64url");

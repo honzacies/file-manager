@@ -13,6 +13,8 @@ export function MoveDialog({
   isOpen,
   onOpenChange,
   all,
+  share,
+  rootLabel,
   startPath,
   moving,
   onMove,
@@ -20,6 +22,8 @@ export function MoveDialog({
   isOpen: boolean;
   onOpenChange: (open: boolean) => void;
   all: boolean;
+  share?: number;
+  rootLabel: string;
   startPath: string;
   // přesouvané cesty — do nich (ani do jejich podsložek) se přesouvat nedá
   moving: string[];
@@ -38,7 +42,7 @@ export function MoveDialog({
     if (!isOpen) return;
     setFolders(null);
     setError(null);
-    ApiFetch<{ entries: Entry[] }>(`/api/files${Query({ path, all })}`).then((result) => {
+    ApiFetch<{ entries: Entry[] }>(`/api/files${Query({ path, all, share })}`).then((result) => {
       if (!result.ok) return setError(ErrorText(result));
       setFolders(
         result.body.entries
@@ -47,7 +51,7 @@ export function MoveDialog({
           .sort((a, b) => a.localeCompare(b, "cs")),
       );
     });
-  }, [isOpen, path, all]);
+  }, [isOpen, path, all, share]);
 
   const isBlocked = (target: string) => moving.some((source) => target === source || target.startsWith(`${source}/`));
   const isSameFolder = moving.every((source) => source.split("/").slice(0, -1).join("/") === path);
@@ -76,7 +80,7 @@ export function MoveDialog({
       }
     >
       <div className="flex flex-col gap-3">
-        <PathBreadcrumbs path={path} rootLabel={all ? "Všechny soubory" : "Moje soubory"} onNavigate={setPath} />
+        <PathBreadcrumbs path={path} rootLabel={rootLabel} onNavigate={setPath} />
         <div className="h-72 overflow-y-auto rounded-xl border border-border">
           {error ? (
             <p className="p-4 text-sm text-danger">{error}</p>

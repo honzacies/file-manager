@@ -22,21 +22,57 @@ export function GetRootDir() {
   return GetSetting("root_dir") ?? Env.DefaultRootDir;
 }
 
-// Co uživatel vidí jako "/": běžný uživatel (i admin v "Moje soubory") svoji
-// složku <root>/<username>, admin v režimu "Všechny soubory" celý kořen.
+// Co uživatel vidí jako "/":
+// - vlastní soubory (i admin v "Moje soubory"): <root>/<username>
+// - admin v režimu "Všechny soubory": celý kořen
+// - sdílení od jiného uživatele: sdílená složka (nebo soubor) vlastníka
 export interface View {
   root: string;
   base: string;
-  // cesta `base` relativně ke kořeni ("" nebo "username")
+  // cesta `base` relativně ke kořeni ("", "username" nebo "vlastnik/Fotky")
   prefix: string;
+  // čí kvóta se při nahrávání hlídá (null = bez hlídání) a jeho domovská složka
+  quotaUserId: number | null;
+  home: string;
+  readOnly: boolean;
+  // sdílený je jen soubor, ne složka
+  isFile: boolean;
 }
 
-export function GetView(user: SessionUser, all = false): View {
+export interface Scope {
+  all?: boolean;
+  share?: number;
+}
+
+export function GetView(user: SessionUser, scope: Scope = {}): View {
   const root = GetRootDir();
-  if (all && user.role === "admin") return { root, base: root, prefix: "" };
+  if (scope.share) {
+    // Příjemce je součástí dotazu — cizí sdílení vypadá stejně jako neexistující.
+    const row = Db.prepare(`
+      SELECT s.owner_id, s.path, s.is_dir, s.can_write, u.username AS owner
+      FROM user_shares s JOIN users u ON u.id = s.owner_id
+      WHERE s.id = ? AND s.recipient_id = ?
+    `).get(scope.share, user.id) as { owner_id: number; path: string; is_dir: number; can_write: number; owner: string } | undefined;
+    if (!row) throw new HttpError(404, "Sdílení neexistuje nebo ti bylo odebráno.");
+    const base = path.join(root, ...row.path.split("/"));
+    return {
+      root,
+      base,
+      prefix: row.path,
+      quotaUserId: row.owner_id,
+      home: path.join(root, row.owner),
+      readOnly: !row.can_write || !row.is_dir,
+      isFile: !row.is_dir,
+    };
+  }
+  if (scope.all && user.role === "admin") return { root, base: root, prefix: "", quotaUserId: null, home: root, readOnly: false, isFile: false };
   const base = path.join(root, user.username);
   mkdirSync(base, { recursive: true });
-  return { root, base, prefix: user.username };
+  return { root, base, prefix: user.username, quotaUserId: user.id, home: base, readOnly: false, isFile: false };
+}
+
+export function AssertWritable(view: View) {
+  if (view.readOnly) throw new HttpError(403, "Tohle sdílení je jen pro čtení.");
 }
 
 // Cesta od klienta -> absolutní cesta uvnitř `view.base`.
@@ -121,15 +157,25 @@ export function QuotaOf(userId: number) {
   return row?.quota_bytes ?? null;
 }
 
-// Vyhodí 413, když by se `incoming` bajtů do kvóty nevešlo. Kvóta hlídá jen vlastní složku
-// (admin v "Všech souborech" ji obchází) a koš se nepočítá.
-export async function AssertQuota(view: View, userId: number, incoming: number) {
-  if (!view.prefix) return;
-  const quota = QuotaOf(userId);
+// Vyhodí 413, když by se `incoming` bajtů do kvóty nevešlo. Kvóta patří vlastníkovi složky
+// (i když nahrává příjemce sdílení), admin v "Všech souborech" ji obchází a koš se nepočítá.
+export async function AssertQuota(view: View, incoming: number) {
+  if (view.quotaUserId === null) return;
+  const quota = QuotaOf(view.quotaUserId);
   if (quota === null) return;
-  const used = await DirSize(view.base);
+  const used = await DirSize(view.home);
   if (used + incoming > quota) {
-    throw new HttpError(413, `Nedostatek místa. Máš limit ${FormatGb(quota)}, zbývá ${FormatGb(Math.max(0, quota - used))}.`);
+    throw new HttpError(413, `Nedostatek místa. Limit je ${FormatGb(quota)}, zbývá ${FormatGb(Math.max(0, quota - used))}.`);
+  }
+}
+
+// Po přejmenování/přesunu posune cesty ve sdíleních (odkazy i uživatelé), ať nepřestanou fungovat.
+// "a/Fotky" -> "a/Rodina/Fotky" platí i pro vše pod ní ("a/Fotky/2024" -> "a/Rodina/Fotky/2024").
+export function RewriteSharedPaths(oldRel: string, newRel: string) {
+  // % _ \ v názvu složky by LIKE bral jako zástupné znaky
+  const like = `${oldRel.replace(/[\\%_]/g, (c) => `\\${c}`)}/%`;
+  for (const table of ["shares", "user_shares"]) {
+    Db.prepare(`UPDATE ${table} SET path = ? || substr(path, ?) WHERE path = ? OR path LIKE ? ESCAPE '\\'`).run(newRel, oldRel.length + 1, oldRel, like);
   }
 }
 
