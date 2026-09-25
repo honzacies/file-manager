@@ -3,7 +3,7 @@ import { createWriteStream } from "node:fs";
 import fs from "node:fs/promises";
 import path from "node:path";
 import { pipeline } from "node:stream/promises";
-import type { FastifyInstance, FastifyRequest } from "fastify";
+import type { FastifyInstance } from "fastify";
 import { RequireUser } from "../Auth.ts";
 import {
   AssertQuota,
@@ -15,42 +15,37 @@ import {
   MovePath,
   MoveToTrash,
   QuotaOf,
+  RelToRoot,
   Resolve,
-  RewriteSharedPaths,
+  RewritePaths,
+  ScopeProps,
+  type ScopeT,
   SendFile,
   StatOrThrow,
+  TouchRecent,
   TRASH_DIR,
   UniquePath,
   UPLOAD_PREFIX,
   ValidName,
-  type View,
+  ViewFor,
 } from "../Storage.ts";
-
-// Rozsah, ve kterém klient pracuje: `all` = admin v "Všech souborech" (běžnému uživateli se
-// ignoruje), `share` = id sdílení, které mu někdo poslal (server ověří, že je příjemce).
-const ScopeProps = {
-  all: { type: "boolean", default: false },
-  share: { type: "integer", minimum: 1 },
-} as const;
 
 const PathQuery = {
   type: "object",
   properties: {
     path: { type: "string", default: "" },
     inline: { type: "boolean", default: false },
+    // náhledy v mřížce se nezapisují do "Nedávné"
+    thumb: { type: "boolean", default: false },
     relative: { type: "string", default: "" },
     ...ScopeProps,
   },
 } as const;
 
-interface ScopeT {
-  all: boolean;
-  share?: number;
-}
-
 interface PathQueryT extends ScopeT {
   path: string;
   inline: boolean;
+  thumb: boolean;
   relative: string;
 }
 
@@ -64,29 +59,26 @@ const PathsBody = {
   },
 } as const;
 
-const ViewFor = (request: FastifyRequest, scope: ScopeT) => GetView(request.user, { all: scope.all, share: scope.share });
-
-// Absolutní cesta -> relativní ke kořeni cloudu ("/cloud/alice/Fotky" -> "alice/Fotky")
-const RelToRoot = (view: View, abs: string) => path.relative(view.root, abs).split(path.sep).join("/");
-
 export async function FileRoutes(app: FastifyInstance) {
   app.addHook("preHandler", RequireUser);
 
   app.get("/files", { schema: { querystring: PathQuery } }, async (request) => {
     const query = request.query as PathQueryT;
     const view = ViewFor(request, query);
-    const { abs, rel } = Resolve(view, query.path);
+    const { abs, rel, relToRoot } = Resolve(view, query.path);
     if (!(await StatOrThrow(abs)).isDirectory()) throw new HttpError(400, "Tohle není složka.");
-    return { path: rel, readOnly: view.readOnly, entries: await ListDir(abs, abs === view.root) };
+    return { path: rel, readOnly: view.readOnly, entries: await ListDir(abs, abs === view.root, relToRoot, request.user.id) };
   });
 
   app.get("/files/download", { schema: { querystring: PathQuery } }, async (request, reply) => {
     const query = request.query as PathQueryT;
     const view = ViewFor(request, query);
-    const { abs, rel } = Resolve(view, query.path);
+    const { abs, rel, relToRoot } = Resolve(view, query.path);
     // Sdílený soubor je sám "kořenem" sdílení, jinak musí být vybraný konkrétní soubor.
     if (!rel && !view.isFile) throw new HttpError(400, "Vyber soubor.");
-    return SendFile(request, reply, abs, query.inline);
+    const result = await SendFile(request, reply, abs, query.inline);
+    if (!query.thumb && !request.headers.range) TouchRecent(request.user.id, relToRoot, query.share);
+    return result;
   });
 
   app.get("/storage", async (request) => {
@@ -155,6 +147,7 @@ export async function FileRoutes(app: FastifyInstance) {
     }
     const final = await UniquePath(targetDir, parts[parts.length - 1]);
     await fs.rename(temp, final);
+    TouchRecent(request.user.id, RelToRoot(view, final), query.share);
     return { name: path.basename(final) };
   });
 
@@ -183,7 +176,7 @@ export async function FileRoutes(app: FastifyInstance) {
       const existing = await fs.stat(target).catch(() => null);
       if (existing && existing.ino !== source.ino) throw new HttpError(409, "Položka s tímhle názvem už existuje.");
       await fs.rename(abs, target);
-      RewriteSharedPaths(relToRoot, RelToRoot(view, target));
+      RewritePaths(relToRoot, RelToRoot(view, target));
       return { name };
     },
   );
@@ -205,7 +198,7 @@ export async function FileRoutes(app: FastifyInstance) {
       await StatOrThrow(abs);
       const target = await UniquePath(destination, path.basename(abs));
       await MovePath(abs, target);
-      RewriteSharedPaths(relToRoot, RelToRoot(view, target));
+      RewritePaths(relToRoot, RelToRoot(view, target));
     }
     return { ok: true };
   });

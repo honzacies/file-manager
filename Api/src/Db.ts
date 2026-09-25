@@ -63,6 +63,29 @@ Db.exec(`
     UNIQUE (recipient_id, path)
   );
 
+  -- Barva složky platí pro všechny, kdo ji vidí. path je relativní ke kořeni cloudu.
+  CREATE TABLE IF NOT EXISTS folder_colors (
+    path  TEXT PRIMARY KEY,
+    color TEXT NOT NULL
+  );
+
+  -- Hvězdičky a nedávné jsou osobní. share_id = položka ze sdílení (zmizí se sdílením).
+  CREATE TABLE IF NOT EXISTS stars (
+    user_id    INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    path       TEXT NOT NULL,
+    share_id   INTEGER REFERENCES user_shares(id) ON DELETE CASCADE,
+    created_at INTEGER NOT NULL,
+    PRIMARY KEY (user_id, path)
+  );
+
+  CREATE TABLE IF NOT EXISTS recent (
+    user_id   INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    path      TEXT NOT NULL,
+    share_id  INTEGER REFERENCES user_shares(id) ON DELETE CASCADE,
+    opened_at INTEGER NOT NULL,
+    PRIMARY KEY (user_id, path)
+  );
+
   CREATE TABLE IF NOT EXISTS notifications (
     id         INTEGER PRIMARY KEY,
     user_id    INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,

@@ -71,6 +71,23 @@ export function GetView(user: SessionUser, scope: Scope = {}): View {
   return { root, base, prefix: user.username, quotaUserId: user.id, home: base, readOnly: false, isFile: false };
 }
 
+// Rozsah posílaný klientem s každým souborovým requestem: `all` = admin v "Všech souborech"
+// (běžnému uživateli se ignoruje), `share` = id sdílení, které mu někdo poslal.
+export const ScopeProps = {
+  all: { type: "boolean", default: false },
+  share: { type: "integer", minimum: 1 },
+} as const;
+
+export interface ScopeT {
+  all: boolean;
+  share?: number;
+}
+
+export const ViewFor = (request: FastifyRequest, scope: ScopeT) => GetView(request.user, { all: scope.all, share: scope.share });
+
+// Absolutní cesta -> relativní ke kořeni cloudu ("/cloud/alice/Fotky" -> "alice/Fotky")
+export const RelToRoot = (view: View, abs: string) => path.relative(view.root, abs).split(path.sep).join("/");
+
 export function AssertWritable(view: View) {
   if (view.readOnly) throw new HttpError(403, "Tohle sdílení je jen pro čtení.");
 }
@@ -122,7 +139,17 @@ export async function StatOrThrow(abs: string) {
   return stat;
 }
 
-export async function ListDir(abs: string, isRoot: boolean) {
+export interface Entry {
+  name: string;
+  isDir: boolean;
+  size: number;
+  modified: number;
+  color?: string;
+  starred?: boolean;
+}
+
+// `dirRel` = cesta složky relativně ke kořeni; s ní se k položkám doplní barva a hvězdička uživatele.
+export async function ListDir(abs: string, isRoot: boolean, dirRel?: string, userId?: number) {
   const dirents = await fs.readdir(abs, { withFileTypes: true });
   const entries = await Promise.all(
     dirents
@@ -134,7 +161,42 @@ export async function ListDir(abs: string, isRoot: boolean) {
         return { name: d.name, isDir, size: isDir ? 0 : stat.size, modified: stat.mtimeMs };
       }),
   );
-  return entries.filter((e) => e !== null);
+  const list = entries.filter((e) => e !== null);
+  if (dirRel === undefined) return list;
+  return Decorate(list, (entry) => [dirRel, entry.name].filter(Boolean).join("/"), userId);
+}
+
+// Doplní barvu složky a hvězdičku. `relOf` vrátí cestu položky relativně ke kořeni.
+export function Decorate<T extends Entry>(entries: T[], relOf: (entry: T) => string, userId?: number): T[] {
+  if (!entries.length) return entries;
+  const rels = JSON.stringify(entries.map(relOf));
+  const colors = new Map(
+    (Db.prepare("SELECT path, color FROM folder_colors WHERE path IN (SELECT value FROM json_each(?))").all(rels) as { path: string; color: string }[]).map(
+      (row) => [row.path, row.color],
+    ),
+  );
+  const stars = new Set(
+    userId === undefined
+      ? []
+      : (Db.prepare("SELECT path FROM stars WHERE user_id = ? AND path IN (SELECT value FROM json_each(?))").all(userId, rels) as { path: string }[]).map(
+          (row) => row.path,
+        ),
+  );
+  return entries.map((entry) => {
+    const rel = relOf(entry);
+    return { ...entry, ...(colors.has(rel) && { color: colors.get(rel) }), ...(stars.has(rel) && { starred: true }) };
+  });
+}
+
+// Otevřený/nahraný soubor do "Nedávné" (drží se posledních 100).
+export function TouchRecent(userId: number, relToRoot: string, shareId?: number) {
+  Db.prepare(`
+    INSERT INTO recent (user_id, path, share_id, opened_at) VALUES (?, ?, ?, ?)
+    ON CONFLICT (user_id, path) DO UPDATE SET opened_at = excluded.opened_at, share_id = excluded.share_id
+  `).run(userId, relToRoot, shareId ?? null, Date.now());
+  Db.prepare(`
+    DELETE FROM recent WHERE user_id = ? AND path NOT IN (SELECT path FROM recent WHERE user_id = ? ORDER BY opened_at DESC LIMIT 100)
+  `).run(userId, userId);
 }
 
 // Součet velikostí všech souborů ve složce (rekurzivně).
@@ -169,12 +231,13 @@ export async function AssertQuota(view: View, incoming: number) {
   }
 }
 
-// Po přejmenování/přesunu posune cesty ve sdíleních (odkazy i uživatelé), ať nepřestanou fungovat.
+// Po přejmenování/přesunu posune cesty všude, kde se na položku odkazuje (sdílení, barvy,
+// hvězdičky, nedávné), ať nic nepřestane fungovat.
 // "a/Fotky" -> "a/Rodina/Fotky" platí i pro vše pod ní ("a/Fotky/2024" -> "a/Rodina/Fotky/2024").
-export function RewriteSharedPaths(oldRel: string, newRel: string) {
+export function RewritePaths(oldRel: string, newRel: string) {
   // % _ \ v názvu složky by LIKE bral jako zástupné znaky
   const like = `${oldRel.replace(/[\\%_]/g, (c) => `\\${c}`)}/%`;
-  for (const table of ["shares", "user_shares"]) {
+  for (const table of ["shares", "user_shares", "folder_colors", "stars", "recent"]) {
     Db.prepare(`UPDATE ${table} SET path = ? || substr(path, ?) WHERE path = ? OR path LIKE ? ESCAPE '\\'`).run(newRel, oldRel.length + 1, oldRel, like);
   }
 }

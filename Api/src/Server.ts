@@ -8,6 +8,7 @@ import { Env } from "./Env.ts";
 import { AdminRoutes } from "./Routes/AdminRoutes.ts";
 import { AuthRoutes } from "./Routes/AuthRoutes.ts";
 import { FileRoutes } from "./Routes/FileRoutes.ts";
+import { OrganizeRoutes } from "./Routes/OrganizeRoutes.ts";
 import { ShareRoutes } from "./Routes/ShareRoutes.ts";
 import { TrashRoutes } from "./Routes/TrashRoutes.ts";
 import { UserShareRoutes } from "./Routes/UserShareRoutes.ts";
@@ -63,6 +64,7 @@ export async function BuildApp() {
     async (api) => {
       await api.register(AuthRoutes);
       await api.register(FileRoutes);
+      await api.register(OrganizeRoutes);
       await api.register(TrashRoutes);
       await api.register(ShareRoutes);
       await api.register(UserShareRoutes);

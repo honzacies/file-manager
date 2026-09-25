@@ -1,7 +1,8 @@
 "use client";
 
 import { Button, Dropdown, Kbd, Label, Separator } from "@heroui/react";
-import { Fragment } from "react";
+import { Fragment, useState } from "react";
+import { FOLDER_COLORS } from "@/lib/format";
 import { Icon } from "../Icon";
 
 export interface Action {
@@ -12,15 +13,31 @@ export interface Action {
   shortcut?: string;
   // oddělovač před položkou
   separated?: boolean;
+  // podmenu (Sdílet ▸, Uspořádat ▸ …)
+  children?: Action[];
+  // paleta barev pod položkami podmenu; `null` = výchozí barva
+  palette?: { value?: string; onPick: (color: string | null) => void };
 }
 
-function Menu({ actions, onAction }: { actions: Action[]; onAction: (id: string) => void }) {
+function Items({ actions, onAction, close }: { actions: Action[]; onAction: (id: string) => void; close: () => void }) {
   return (
-    <Dropdown.Popover placement="bottom start" className="min-w-56">
-      <Dropdown.Menu aria-label="Akce" onAction={(key) => onAction(String(key))}>
-        {actions.map((action) => (
-          <Fragment key={action.id}>
-            {action.separated && <Separator />}
+    <Dropdown.Menu aria-label="Akce" onAction={(key) => onAction(String(key))}>
+      {actions.map((action) => (
+        <Fragment key={action.id}>
+          {action.separated && <Separator />}
+          {action.children ? (
+            <Dropdown.SubmenuTrigger>
+              <Dropdown.Item id={action.id} textValue={action.label}>
+                <Icon name={action.icon} className="shrink-0 text-[18px] text-muted" />
+                <Label>{action.label}</Label>
+                <Dropdown.SubmenuIndicator />
+              </Dropdown.Item>
+              <Dropdown.Popover className="min-w-60">
+                <Items actions={action.children} onAction={onAction} close={close} />
+                {action.palette && <Palette palette={action.palette} close={close} />}
+              </Dropdown.Popover>
+            </Dropdown.SubmenuTrigger>
+          ) : (
             <Dropdown.Item id={action.id} textValue={action.label} variant={action.danger ? "danger" : "default"}>
               <Icon name={action.icon} className={`shrink-0 text-[18px] ${action.danger ? "" : "text-muted"}`} />
               <Label>{action.label}</Label>
@@ -30,10 +47,43 @@ function Menu({ actions, onAction }: { actions: Action[]; onAction: (id: string)
                 </Kbd>
               )}
             </Dropdown.Item>
-          </Fragment>
+          )}
+        </Fragment>
+      ))}
+    </Dropdown.Menu>
+  );
+}
+
+// Barvy složky v podmenu Uspořádat. Tlačítka mimo Menu → po výběru se celé menu zavře ručně.
+function Palette({ palette, close }: { palette: NonNullable<Action["palette"]>; close: () => void }) {
+  const Pick = (color: string | null) => {
+    palette.onPick(color);
+    close();
+  };
+  return (
+    <div className="border-t border-separator px-3 pt-2 pb-3">
+      <p className="mb-2 text-xs text-muted">Barva složky</p>
+      <div className="grid grid-cols-8 gap-1.5">
+        {FOLDER_COLORS.map((color) => (
+          <button
+            key={color}
+            type="button"
+            aria-label={`Barva ${color}`}
+            aria-pressed={palette.value === color}
+            onClick={() => Pick(color)}
+            className="grid size-6 place-items-center rounded-full outline-none ring-offset-2 ring-offset-overlay hover:scale-110 focus-visible:ring-2 focus-visible:ring-focus"
+            style={{ background: color }}
+          >
+            {palette.value === color && <Icon name="check" className="text-[16px] text-white" />}
+          </button>
         ))}
-      </Dropdown.Menu>
-    </Dropdown.Popover>
+      </div>
+      {palette.value && (
+        <button type="button" onClick={() => Pick(null)} className="mt-2 text-xs text-muted underline-offset-2 hover:underline">
+          Výchozí barva
+        </button>
+      )}
+    </div>
   );
 }
 
@@ -53,24 +103,25 @@ export function ContextMenu({
   if (!position || !actions.length) return null;
   return (
     <Dropdown key={`${position.x},${position.y}`} isOpen onOpenChange={(open) => !open && onClose()}>
-      <Dropdown.Trigger
-        aria-label="Kontextové menu"
-        className="pointer-events-none fixed size-px opacity-0"
-        style={{ left: position.x, top: position.y }}
-      />
-      <Menu actions={actions} onAction={onAction} />
+      <Dropdown.Trigger aria-label="Kontextové menu" className="pointer-events-none fixed size-px opacity-0" style={{ left: position.x, top: position.y }} />
+      <Dropdown.Popover placement="bottom start" className="min-w-60">
+        <Items actions={actions} onAction={onAction} close={onClose} />
+      </Dropdown.Popover>
     </Dropdown>
   );
 }
 
 // Tlačítko "⋮" u položky — stejné menu i pro klávesnici a dotyk.
 export function MoreButton({ actions, onAction, label }: { actions: Action[]; onAction: (id: string) => void; label: string }) {
+  const [open, setOpen] = useState(false);
   return (
-    <Dropdown>
+    <Dropdown isOpen={open} onOpenChange={setOpen}>
       <Button isIconOnly size="sm" variant="ghost" aria-label={label} className="shrink-0 text-muted">
         <Icon name="more_vert" className="text-[20px]" />
       </Button>
-      <Menu actions={actions} onAction={onAction} />
+      <Dropdown.Popover placement="bottom end" className="min-w-60">
+        <Items actions={actions} onAction={onAction} close={() => setOpen(false)} />
+      </Dropdown.Popover>
     </Dropdown>
   );
 }

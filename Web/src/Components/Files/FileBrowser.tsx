@@ -8,10 +8,12 @@ import { FilesFromDrop, FilesFromInput } from "@/lib/dropFiles";
 import { CanPreview, type Entry, JoinPath } from "@/lib/format";
 import { ConfirmDialog } from "../ConfirmDialog";
 import { Icon } from "../Icon";
+import { useOffline } from "../Offline";
 import { PageHeader } from "../PageHeader";
 import { useUser } from "../Session";
 import { useUploads } from "../Uploads";
 import { type Action, ContextMenu } from "./ActionMenu";
+import { DetailsDialog } from "./DetailsDialog";
 import { DRAG_TYPE, FileItems, type ItemHandlers, type Sort, SortEntries } from "./FileItems";
 import { MoveDialog } from "./MoveDialog";
 import { NameDialog } from "./NameDialog";
@@ -26,6 +28,7 @@ type DialogState =
   | { kind: "move"; names: string[] }
   | { kind: "share"; entry: Entry }
   | { kind: "shareUsers"; entry: Entry }
+  | { kind: "details"; entry: Entry }
   | { kind: "delete"; names: string[] }
   | null;
 
@@ -47,6 +50,9 @@ function ReadView(): "list" | "grid" {
   }
 }
 
+// "sub/leto.jpg" -> "leto.jpg" (výsledky hledání mají v názvu cestu)
+const BaseName = (name: string) => name.slice(name.lastIndexOf("/") + 1);
+
 export function FileBrowser() {
   const user = useUser();
   const router = useRouter();
@@ -55,16 +61,20 @@ export function FileBrowser() {
   const all = user.role === "admin" && params.get("all") === "1";
   // Cizí sdílená složka: rozsah posílaný s každým requestem, server ověří, že jsem příjemce.
   const share = Number(params.get("share")) || undefined;
+  // Hledání v podsložkách (Enter v hledání nebo "Vyhledat ve složce").
+  const q = params.get("q") ?? "";
   const uploads = useUploads();
+  const offline = useOffline();
 
   const [entries, setEntries] = useState<Entry[] | null>(null);
+  const [truncated, setTruncated] = useState(false);
   const [readOnly, setReadOnly] = useState(false);
   const [shareInfo, setShareInfo] = useState<IncomingShare | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [reloadKey, setReloadKey] = useState(0);
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [anchor, setAnchor] = useState<string | null>(null);
-  const [filter, setFilter] = useState("");
+  const [filter, setFilter] = useState(q);
   const [view, setView] = useState<"list" | "grid">("list");
   const [sort, setSort] = useState<Sort>({ key: "name", dir: 1 });
   const [dialog, setDialog] = useState<DialogState>(null);
@@ -72,9 +82,11 @@ export function FileBrowser() {
   const [menu, setMenu] = useState<{ x: number; y: number; entry: Entry | null } | null>(null);
   const [preview, setPreview] = useState<number | null>(null);
   const [dropActive, setDropActive] = useState(false);
+  const [focusSearch, setFocusSearch] = useState(false);
   const dragDepth = useRef(0);
   const fileInput = useRef<HTMLInputElement>(null);
   const folderInput = useRef<HTMLInputElement>(null);
+  const searchInput = useRef<HTMLInputElement>(null);
 
   useEffect(() => setView(ReadView()), []);
   const ChangeView = (next: "list" | "grid") => {
@@ -85,14 +97,15 @@ export function FileBrowser() {
   };
 
   const Reload = useCallback(() => setReloadKey((k) => k + 1), []);
+  const scope = { all, share };
 
   // Při změně složky začít načítat nanovo a zrušit výběr.
   useEffect(() => {
     setEntries(null);
     setSelected(new Set());
     setAnchor(null);
-    setFilter("");
-  }, [path, all, share]);
+    setFilter(q);
+  }, [path, all, share, q]);
 
   useEffect(() => {
     setShareInfo(null);
@@ -102,12 +115,14 @@ export function FileBrowser() {
 
   useEffect(() => {
     let cancelled = false;
-    ApiFetch<{ entries: Entry[]; readOnly: boolean }>(`/api/files${Query({ path, all, share })}`).then((result) => {
+    const url = q ? `/api/files/search${Query({ path, q, all, share })}` : `/api/files${Query({ path, all, share })}`;
+    ApiFetch<{ entries: Entry[]; readOnly: boolean; truncated?: boolean }>(url).then((result) => {
       if (cancelled) return;
       if (!result.ok) return setError(ErrorText(result));
       setError(null);
       setEntries(result.body.entries);
       setReadOnly(result.body.readOnly);
+      setTruncated(!!result.body.truncated);
       // Po obnovení nechat označené jen to, co ještě existuje.
       const names = new Set(result.body.entries.map((entry) => entry.name));
       setSelected((current) => new Set([...current].filter((name) => names.has(name))));
@@ -115,22 +130,37 @@ export function FileBrowser() {
     return () => {
       cancelled = true;
     };
-  }, [path, all, share, reloadKey, uploads.version]);
+  }, [path, all, share, q, reloadKey, uploads.version]);
+
+  // "Vyhledat ve složce": po otevření složky skočit kurzorem do hledání.
+  useEffect(() => {
+    if (focusSearch && entries) {
+      searchInput.current?.focus();
+      setFocusSearch(false);
+    }
+  }, [focusSearch, entries]);
 
   const visible = useMemo(() => {
-    const needle = filter.trim().toLocaleLowerCase("cs");
+    // Výsledky hledání už filtruje server, živý filtr jen v běžné složce.
+    const needle = q ? "" : filter.trim().toLocaleLowerCase("cs");
     const filtered = (entries ?? []).filter((entry) => !needle || entry.name.toLocaleLowerCase("cs").includes(needle));
     return SortEntries(filtered, sort);
-  }, [entries, filter, sort]);
+  }, [entries, filter, sort, q]);
 
   const previewable = useMemo(() => visible.filter(CanPreview), [visible]);
   const selectedEntries = visible.filter((entry) => selected.has(entry.name));
 
   const Navigate = useCallback(
-    (next: string) => router.push(`/files/${Query({ path: next, all: all ? "1" : undefined, share })}`),
+    (next: string, search?: string) => router.push(`/files/${Query({ path: next, all: all ? "1" : undefined, share, q: search })}`),
     [router, all, share],
   );
   const FileUrl = (entry: Entry, inline: boolean) => `/api/files/download${Query({ path: JoinPath(path, entry.name), all, share, inline })}`;
+  // Víc položek nebo složka -> ZIP (parametr `paths` se opakuje)
+  const ZipUrl = (targets: Entry[]) => {
+    const search = new URLSearchParams(Query({ all, share }).slice(1));
+    for (const entry of targets) search.append("paths", JoinPath(path, entry.name));
+    return `/api/files/zip?${search}`;
+  };
 
   function Open(entry: Entry) {
     if (entry.isDir) return Navigate(JoinPath(path, entry.name));
@@ -140,17 +170,12 @@ export function FileBrowser() {
   }
 
   function Download(targets: Entry[]) {
-    // Víc souborů = víc stažení; prohlížeč se napoprvé zeptá, jestli je povolit.
-    targets
-      .filter((entry) => !entry.isDir)
-      .forEach((entry, i) => {
-        setTimeout(() => {
-          const link = document.createElement("a");
-          link.href = FileUrl(entry, false);
-          link.download = entry.name;
-          link.click();
-        }, i * 300);
-      });
+    if (!targets.length) return;
+    const link = document.createElement("a");
+    const single = targets.length === 1 && !targets[0].isDir;
+    link.href = single ? FileUrl(targets[0], false) : ZipUrl(targets);
+    if (single) link.download = BaseName(targets[0].name);
+    link.click();
   }
 
   // ---- Výběr ------------------------------------------------------------
@@ -174,23 +199,88 @@ export function FileBrowser() {
 
   // ---- Akce -------------------------------------------------------------
 
+  // Struktura podle Google Drive: podmenu Sdílet / Uspořádat / Informace.
   function ActionsFor(targets: Entry[]): Action[] {
     if (!targets.length) return [];
     const single = targets.length === 1 ? targets[0] : null;
-    const hasFiles = targets.some((entry) => !entry.isDir);
-    const base: Action[] = [
-      ...(single ? [{ id: "open", label: single.isDir ? "Otevřít" : CanPreview(single) ? "Náhled" : "Otevřít", icon: single.isDir ? "folder_open" : "visibility", shortcut: "Enter" }] : []),
-      ...(hasFiles ? [{ id: "download", label: targets.length > 1 ? "Stáhnout soubory" : "Stáhnout", icon: "download" }] : []),
-    ];
-    if (readOnly) return base;
+    const allStarred = targets.every((entry) => entry.starred);
+    const star: Action = { id: allStarred ? "unstar" : "star", label: allStarred ? "Odebrat hvězdičku" : "Označit hvězdičkou", icon: allStarred ? "star_half" : "star" };
+    const canShare = !readOnly && !share;
+    const download: Action = {
+      id: "download",
+      label: single && !single.isDir ? "Stáhnout" : "Stáhnout jako ZIP",
+      icon: single && !single.isDir ? "download" : "folder_zip",
+    };
+    const shareMenu: Action = {
+      id: "shareMenu",
+      label: "Sdílet",
+      icon: "person_add",
+      separated: true,
+      children: [
+        { id: "shareUsers", label: "Sdílet s uživateli", icon: "group_add" },
+        { id: "share", label: "Veřejný odkaz", icon: "link" },
+      ],
+    };
+    const trash: Action = { id: "delete", label: "Přesunout do koše", icon: "delete", danger: true, shortcut: "Del", separated: true };
+
+    if (!single) {
+      return [
+        download,
+        { id: "organize", label: "Uspořádat", icon: "folder_open", separated: true, children: [...(readOnly ? [] : [{ id: "move", label: "Přesunout", icon: "drive_file_move" }]), star] },
+        ...(readOnly ? [] : [trash]),
+      ];
+    }
+
+    if (single.isDir) {
+      return [
+        { id: "open", label: "Otevřít", icon: "folder_open", shortcut: "Enter" },
+        download,
+        ...(readOnly ? [] : [{ id: "rename", label: "Přejmenovat", icon: "edit", shortcut: "F2" }]),
+        ...(canShare ? [shareMenu] : []),
+        {
+          id: "organize",
+          label: "Uspořádat",
+          icon: "folder_open",
+          separated: !canShare,
+          children: [...(readOnly ? [] : [{ id: "move", label: "Přesunout", icon: "drive_file_move" }]), star],
+          ...(!readOnly && { palette: { value: single.color, onPick: (color: string | null) => SetColor(single, color) } }),
+        },
+        {
+          id: "info",
+          label: "Informace o složce",
+          icon: "info",
+          children: [
+            { id: "details", label: "Podrobnosti", icon: "info" },
+            { id: "searchIn", label: "Vyhledat ve složce", icon: "search" },
+          ],
+        },
+        ...(readOnly ? [] : [trash]),
+      ];
+    }
+
+    const saved = offline.IsOffline(FileUrl(single, false));
     return [
-      ...base,
-      // Dál sdílet jde jen vlastní soubory, ne cizí sdílení.
-      ...(single && !share ? [{ id: "shareUsers", label: "Sdílet s uživateli", icon: "group_add", separated: true }] : []),
-      ...(single && !share ? [{ id: "share", label: "Sdílet odkazem", icon: "link" }] : []),
-      ...(single ? [{ id: "rename", label: "Přejmenovat", icon: "edit", shortcut: "F2", separated: !single }] : []),
-      { id: "move", label: "Přesunout", icon: "drive_file_move", separated: !single },
-      { id: "delete", label: "Přesunout do koše", icon: "delete", danger: true, shortcut: "Del", separated: true },
+      {
+        id: "openWith",
+        label: "Otevřít pomocí",
+        icon: "open_with",
+        children: [
+          ...(CanPreview(single) ? [{ id: "open", label: "Náhled v cloudu", icon: "visibility" }] : []),
+          { id: "newTab", label: "Otevřít v nové kartě", icon: "open_in_new" },
+        ],
+      },
+      { ...download, separated: true },
+      ...(readOnly
+        ? []
+        : [
+            { id: "rename", label: "Přejmenovat", icon: "edit", shortcut: "F2" },
+            { id: "copy", label: "Vytvořit kopii", icon: "content_copy" },
+          ]),
+      ...(canShare ? [shareMenu] : []),
+      { id: "organize", label: "Uspořádat", icon: "folder_open", separated: !canShare, children: [...(readOnly ? [] : [{ id: "move", label: "Přesunout", icon: "drive_file_move" }]), star] },
+      { id: "details", label: "Informace o souboru", icon: "info" },
+      { id: "offline", label: saved ? "Odebrat z offline" : "Zpřístupnit offline", icon: saved ? "offline_pin" : "download_for_offline" },
+      ...(readOnly ? [] : [trash]),
     ];
   }
 
@@ -207,19 +297,34 @@ export function FileBrowser() {
 
   function RunAction(id: string, targets: Entry[]) {
     const names = targets.map((entry) => entry.name);
+    const first = targets[0];
     switch (id) {
       case "open":
-        return Open(targets[0]);
+        return Open(first);
+      case "newTab":
+        return window.open(FileUrl(first, true), "_blank", "noopener");
       case "download":
         return Download(targets);
       case "share":
-        return setDialog({ kind: "share", entry: targets[0] });
+        return setDialog({ kind: "share", entry: first });
       case "shareUsers":
-        return setDialog({ kind: "shareUsers", entry: targets[0] });
+        return setDialog({ kind: "shareUsers", entry: first });
       case "rename":
-        return setDialog({ kind: "rename", entry: targets[0] });
+        return setDialog({ kind: "rename", entry: first });
+      case "copy":
+        return Copy(targets);
       case "move":
         return setDialog({ kind: "move", names });
+      case "star":
+      case "unstar":
+        return Star(targets, id === "star");
+      case "details":
+        return setDialog({ kind: "details", entry: first });
+      case "searchIn":
+        setFocusSearch(true);
+        return Navigate(JoinPath(path, first.name));
+      case "offline":
+        return offline.Toggle(FileUrl(first, false), BaseName(first.name));
       case "delete":
         return setDialog({ kind: "delete", names });
       case "newFolder":
@@ -240,20 +345,36 @@ export function FileBrowser() {
     return result;
   }
 
+  const PathsOf = (names: string[]) => names.map((name) => JoinPath(path, name));
+
   async function Delete(names: string[]) {
     setPending(true);
-    const result = await Mutate("/api/files/delete", { paths: names.map((name) => JoinPath(path, name)) });
+    const result = await Mutate("/api/files/delete", { paths: PathsOf(names) });
     setPending(false);
     setDialog(null);
-    if (result.ok) toast.success(names.length === 1 ? `„${names[0]}“ je v koši` : `${names.length} položek přesunuto do koše`);
+    if (result.ok) toast.success(names.length === 1 ? `„${BaseName(names[0])}“ je v koši` : `${names.length} položek přesunuto do koše`);
   }
 
   async function MoveInto(destination: string, names: string[]) {
-    const result = await Mutate("/api/files/move", { paths: names.map((name) => JoinPath(path, name)), destination });
+    const result = await Mutate("/api/files/move", { paths: PathsOf(names), destination });
     if (result.ok) {
       setDialog(null);
-      toast.success(names.length === 1 ? `„${names[0]}“ přesunuto` : `${names.length} položek přesunuto`);
+      toast.success(names.length === 1 ? `„${BaseName(names[0])}“ přesunuto` : `${names.length} položek přesunuto`);
     }
+  }
+
+  async function Copy(targets: Entry[]) {
+    const result = await Mutate("/api/files/copy", { paths: PathsOf(targets.map((entry) => entry.name)) });
+    if (result.ok) toast.success(targets.length === 1 ? `Vytvořena kopie „${BaseName(targets[0].name)}“` : `Vytvořeno ${targets.length} kopií`);
+  }
+
+  async function Star(targets: Entry[], starred: boolean) {
+    const result = await Mutate("/api/files/star", { paths: PathsOf(targets.map((entry) => entry.name)), starred });
+    if (result.ok) toast.success(starred ? "Přidáno do S hvězdičkou" : "Odebráno z S hvězdičkou");
+  }
+
+  async function SetColor(entry: Entry, color: string | null) {
+    await Mutate("/api/files/color", { paths: [JoinPath(path, entry.name)], color });
   }
 
   // ---- Klávesnice -------------------------------------------------------
@@ -271,7 +392,7 @@ export function FileBrowser() {
       else if (event.key === "Enter" && current.length === 1) Open(current[0]);
       else if (event.key === "Escape") setSelected(new Set());
       else if (event.key === "a" && (event.ctrlKey || event.metaKey)) setSelected(new Set(visible.map((e) => e.name)));
-      else if (event.key === "Backspace" && path) Navigate(path.split("/").slice(0, -1).join("/"));
+      else if (event.key === "Backspace" && (path || q)) Navigate(q ? path : path.split("/").slice(0, -1).join("/"));
       else if (["ArrowDown", "ArrowUp", "ArrowLeft", "ArrowRight"].includes(event.key) && visible.length) {
         const index = visible.findIndex((e) => e.name === anchor);
         const step = event.key === "ArrowDown" || event.key === "ArrowRight" ? 1 : -1;
@@ -330,19 +451,23 @@ export function FileBrowser() {
     actionsFor: (entry) => ActionsFor([entry]),
     onAction: (entry, id) => RunAction(id, [entry]),
     onDropInto: (folder, names) => MoveInto(JoinPath(path, folder), names),
-    thumbUrl: (entry) => FileUrl(entry, true),
+    thumbUrl: (entry) => `${FileUrl(entry, true)}&thumb=true`,
+    isOffline: (entry) => !entry.isDir && offline.IsOffline(FileUrl(entry, false)),
     readOnly,
   };
 
   // Cíl kontextového menu: pravý klik na označenou položku = celý výběr.
   const menuTargets = menu?.entry ? (selected.has(menu.entry.name) ? selectedEntries : [menu.entry]) : [];
-  const title = share ? (shareInfo?.name ?? "Sdílená složka") : all ? "Všechny soubory" : "Moje soubory";
+  const rootTitle = share ? (shareInfo?.name ?? "Sdílená složka") : all ? "Všechny soubory" : "Moje soubory";
   const description = share
     ? shareInfo && `Sdílí ${shareInfo.owner} · ${readOnly ? "jen pro čtení" : "můžeš upravovat"}`
     : all
       ? "Celý kořen cloudu včetně složek všech uživatelů."
       : undefined;
+  const folderName = path.split("/").pop() || rootTitle;
   const renameEntry = dialog?.kind === "rename" ? dialog.entry : null;
+  const detailsEntry = dialog?.kind === "details" ? dialog.entry : null;
+  const allStarred = selectedEntries.length > 0 && selectedEntries.every((entry) => entry.starred);
 
   return (
     // biome-ignore lint/a11y/noStaticElementInteractions: drop zóna a kontextové menu pozadí
@@ -361,35 +486,35 @@ export function FileBrowser() {
       }}
     >
       <PageHeader
-        title={title}
+        title={rootTitle}
         description={description}
         actions={
           !readOnly && (
-          <>
-            <Button variant="secondary" onPress={() => setDialog({ kind: "newFolder" })}>
-              <Icon name="create_new_folder" className="text-[18px]" />
-              Nová složka
-            </Button>
-            <Dropdown>
-              <Button>
-                <Icon name="upload" className="text-[18px]" />
-                Nahrát
-                <Icon name="expand_more" className="-mr-1 text-[18px]" />
+            <>
+              <Button variant="secondary" onPress={() => setDialog({ kind: "newFolder" })}>
+                <Icon name="create_new_folder" className="text-[18px]" />
+                Nová složka
               </Button>
-              <Dropdown.Popover placement="bottom end">
-                <Dropdown.Menu aria-label="Nahrát" onAction={(key) => RunAction(String(key), [])}>
-                  <Dropdown.Item id="uploadFiles" textValue="Soubory">
-                    <Icon name="upload_file" className="text-[18px] text-muted" />
-                    <Label>Soubory</Label>
-                  </Dropdown.Item>
-                  <Dropdown.Item id="uploadFolder" textValue="Složku">
-                    <Icon name="drive_folder_upload" className="text-[18px] text-muted" />
-                    <Label>Složku</Label>
-                  </Dropdown.Item>
-                </Dropdown.Menu>
-              </Dropdown.Popover>
-            </Dropdown>
-          </>
+              <Dropdown>
+                <Button>
+                  <Icon name="upload" className="text-[18px]" />
+                  Nahrát
+                  <Icon name="expand_more" className="-mr-1 text-[18px]" />
+                </Button>
+                <Dropdown.Popover placement="bottom end">
+                  <Dropdown.Menu aria-label="Nahrát" onAction={(key) => RunAction(String(key), [])}>
+                    <Dropdown.Item id="uploadFiles" textValue="Soubory">
+                      <Icon name="upload_file" className="text-[18px] text-muted" />
+                      <Label>Soubory</Label>
+                    </Dropdown.Item>
+                    <Dropdown.Item id="uploadFolder" textValue="Složku">
+                      <Icon name="drive_folder_upload" className="text-[18px] text-muted" />
+                      <Label>Složku</Label>
+                    </Dropdown.Item>
+                  </Dropdown.Menu>
+                </Dropdown.Popover>
+              </Dropdown>
+            </>
           )
         }
       />
@@ -419,21 +544,21 @@ export function FileBrowser() {
       <div className="flex min-h-10 flex-wrap items-center gap-3">
         {selected.size > 0 ? (
           <div className="flex min-h-10 w-full flex-wrap items-center gap-1 rounded-2xl bg-accent/10 py-1 pr-2 pl-4" role="toolbar" aria-label="Akce s výběrem">
-            <span className="mr-auto text-sm font-medium text-accent">
-              Označeno: {selected.size}
-            </span>
-            {selectedEntries.some((entry) => !entry.isDir) && (
-              <Button size="sm" variant="tertiary" onPress={() => Download(selectedEntries)}>
-                <Icon name="download" className="text-[18px]" />
-                <span className="hidden sm:inline">Stáhnout</span>
-              </Button>
-            )}
+            <span className="mr-auto text-sm font-medium text-accent">Označeno: {selected.size}</span>
+            <Button size="sm" variant="tertiary" onPress={() => Download(selectedEntries)}>
+              <Icon name={selectedEntries.length === 1 && !selectedEntries[0].isDir ? "download" : "folder_zip"} className="text-[18px]" />
+              <span className="hidden sm:inline">Stáhnout</span>
+            </Button>
             {selectedEntries.length === 1 && !share && !readOnly && (
               <Button size="sm" variant="tertiary" onPress={() => RunAction("shareUsers", selectedEntries)}>
                 <Icon name="group_add" className="text-[18px]" />
                 <span className="hidden sm:inline">Sdílet</span>
               </Button>
             )}
+            <Button size="sm" variant="tertiary" onPress={() => Star(selectedEntries, !allStarred)}>
+              <Icon name={allStarred ? "star_half" : "star"} className="text-[18px]" />
+              <span className="hidden sm:inline">{allStarred ? "Odebrat hvězdičku" : "Hvězdička"}</span>
+            </Button>
             {!readOnly && (
               <>
                 <Button size="sm" variant="tertiary" onPress={() => RunAction("move", selectedEntries)}>
@@ -453,12 +578,20 @@ export function FileBrowser() {
         ) : (
           <>
             <div className="min-w-0 basis-full sm:flex-1 sm:basis-auto">
-              <PathBreadcrumbs path={path} rootLabel={title} onNavigate={Navigate} />
+              <PathBreadcrumbs path={path} rootLabel={rootTitle} onNavigate={(next) => Navigate(next)} />
             </div>
-            <SearchField aria-label="Hledat v této složce" value={filter} onChange={setFilter} className="min-w-0 flex-1 sm:w-56 sm:flex-none">
+            <SearchField
+              aria-label="Hledat v této složce"
+              value={filter}
+              onChange={setFilter}
+              // Enter = hledat i v podsložkách, psaní = živý filtr aktuální složky
+              onSubmit={(value) => value.trim() && Navigate(path, value.trim())}
+              onClear={() => q && Navigate(path)}
+              className="min-w-0 flex-1 sm:w-64 sm:flex-none"
+            >
               <SearchField.Group>
                 <SearchField.SearchIcon />
-                <SearchField.Input placeholder="Hledat ve složce…" />
+                <SearchField.Input ref={searchInput} placeholder="Hledat (Enter = i v podsložkách)" />
                 <SearchField.ClearButton />
               </SearchField.Group>
             </SearchField>
@@ -481,6 +614,19 @@ export function FileBrowser() {
           </>
         )}
       </div>
+
+      {q && (
+        <div className="-mt-1 flex flex-wrap items-center gap-2 text-sm">
+          <Icon name="manage_search" className="text-[20px] text-accent" />
+          <span>
+            Výsledky pro „<b>{q}</b>“ ve složce „{folderName}“ a podsložkách
+            {entries && <span className="text-muted"> · {truncated ? "prvních " : ""}{entries.length}</span>}
+          </span>
+          <Button size="sm" variant="ghost" onPress={() => Navigate(path)}>
+            Zrušit hledání
+          </Button>
+        </div>
+      )}
 
       <div className="flex-1">
         {error ? (
@@ -506,17 +652,19 @@ export function FileBrowser() {
         ) : visible.length === 0 ? (
           <EmptyState className="flex flex-col items-center gap-2 py-16 text-center">
             <span className="grid size-16 place-items-center rounded-full bg-accent/10">
-              <Icon name={filter ? "search_off" : "cloud_upload"} className="text-[32px] text-accent" />
+              <Icon name={filter || q ? "search_off" : "cloud_upload"} className="text-[32px] text-accent" />
             </span>
-            <p className="font-medium">{filter ? "Nic nenalezeno" : "Složka je prázdná"}</p>
+            <p className="font-medium">{filter || q ? "Nic nenalezeno" : "Složka je prázdná"}</p>
             <p className="max-w-xs text-sm text-muted">
-              {filter
-                ? `V téhle složce nic neodpovídá „${filter}“.`
-                : readOnly
-                  ? "Až sem vlastník něco nahraje, uvidíš to tady."
-                  : "Přetáhni sem soubory nebo složky, nebo použij tlačítko Nahrát."}
+              {q
+                ? `Ve složce „${folderName}“ ani jejích podsložkách nic neodpovídá „${q}“.`
+                : filter
+                  ? `V téhle složce nic neodpovídá „${filter}“. Enterem hledáš i v podsložkách.`
+                  : readOnly
+                    ? "Až sem vlastník něco nahraje, uvidíš to tady."
+                    : "Přetáhni sem soubory nebo složky, nebo použij tlačítko Nahrát."}
             </p>
-            {!filter && !readOnly && (
+            {!filter && !q && !readOnly && (
               <Button className="mt-2" onPress={() => fileInput.current?.click()}>
                 <Icon name="upload" className="text-[18px]" />
                 Nahrát soubory
@@ -540,7 +688,7 @@ export function FileBrowser() {
         <div className="pointer-events-none absolute inset-0 z-20 grid place-items-center rounded-3xl border-2 border-dashed border-accent bg-accent/10 backdrop-blur-[2px]">
           <div className="flex flex-col items-center gap-2 text-accent">
             <Icon name="cloud_upload" className="text-[56px]" />
-            <p className="font-medium">Pusť soubory pro nahrání do „{path.split("/").pop() || title}“</p>
+            <p className="font-medium">Pusť soubory pro nahrání do „{folderName}“</p>
           </div>
         </div>
       )}
@@ -570,14 +718,14 @@ export function FileBrowser() {
         isOpen={!!renameEntry}
         onOpenChange={(open) => !open && setDialog(null)}
         title="Přejmenovat"
-        initial={renameEntry?.name ?? ""}
+        initial={renameEntry ? BaseName(renameEntry.name) : ""}
         confirmLabel="Přejmenovat"
         onSubmit={async (name) => {
-          if (!renameEntry || name === renameEntry.name) return setDialog(null), null;
+          if (!renameEntry || name === BaseName(renameEntry.name)) return setDialog(null), null;
           const result = await ApiFetch("/api/files/rename", "POST", { path: JoinPath(path, renameEntry.name), name, all, share });
           if (!result.ok) return ErrorText(result);
           setDialog(null);
-          setSelected(new Set([name]));
+          if (!q) setSelected(new Set([name]));
           Reload();
           return null;
         }}
@@ -587,28 +735,36 @@ export function FileBrowser() {
         onOpenChange={(open) => !open && setDialog(null)}
         all={all}
         share={share}
-        rootLabel={title}
+        rootLabel={rootTitle}
         startPath={path}
-        moving={dialog?.kind === "move" ? dialog.names.map((name) => JoinPath(path, name)) : []}
+        moving={dialog?.kind === "move" ? PathsOf(dialog.names) : []}
         onMove={(destination) => MoveInto(destination, dialog?.kind === "move" ? dialog.names : [])}
       />
       <ShareDialog
         isOpen={dialog?.kind === "share"}
         onOpenChange={(open) => !open && setDialog(null)}
         all={all}
-        target={dialog?.kind === "share" ? { path: JoinPath(path, dialog.entry.name), name: dialog.entry.name, isDir: dialog.entry.isDir } : null}
+        target={dialog?.kind === "share" ? { path: JoinPath(path, dialog.entry.name), name: BaseName(dialog.entry.name), isDir: dialog.entry.isDir } : null}
       />
       <UserShareDialog
         isOpen={dialog?.kind === "shareUsers"}
         onOpenChange={(open) => !open && setDialog(null)}
         all={all}
-        target={dialog?.kind === "shareUsers" ? { path: JoinPath(path, dialog.entry.name), name: dialog.entry.name, isDir: dialog.entry.isDir } : null}
+        target={dialog?.kind === "shareUsers" ? { path: JoinPath(path, dialog.entry.name), name: BaseName(dialog.entry.name), isDir: dialog.entry.isDir } : null}
+      />
+      <DetailsDialog
+        target={detailsEntry && { path: JoinPath(path, detailsEntry.name), name: BaseName(detailsEntry.name), isDir: detailsEntry.isDir, color: detailsEntry.color }}
+        scope={scope}
+        location={[rootTitle, ...JoinPath(path, detailsEntry?.name ?? "").split("/").slice(0, -1)].filter(Boolean).join(" / ")}
+        onClose={() => setDialog(null)}
       />
       <ConfirmDialog
         isOpen={dialog?.kind === "delete"}
         onOpenChange={(open) => !open && setDialog(null)}
         heading={
-          dialog?.kind === "delete" && dialog.names.length === 1 ? `Přesunout „${dialog.names[0]}“ do koše?` : `Přesunout ${dialog?.kind === "delete" ? dialog.names.length : 0} položek do koše?`
+          dialog?.kind === "delete" && dialog.names.length === 1
+            ? `Přesunout „${BaseName(dialog.names[0])}“ do koše?`
+            : `Přesunout ${dialog?.kind === "delete" ? dialog.names.length : 0} položek do koše?`
         }
         confirmLabel="Přesunout do koše"
         isPending={pending}

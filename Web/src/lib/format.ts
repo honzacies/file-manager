@@ -3,7 +3,17 @@ export interface Entry {
   isDir: boolean;
   size: number;
   modified: number;
+  // barva složky (#rrggbb) a hvězdička přihlášeného uživatele
+  color?: string;
+  starred?: boolean;
 }
+
+// Paleta barev složek (4 řady po 8 jako v Google Drive).
+export const FOLDER_COLORS = [
+  "#ac725e", "#d06b64", "#f83a22", "#fa573c", "#ff7537", "#ffad46", "#fad165", "#fbe983",
+  "#b3dc6c", "#7bd148", "#16a765", "#42d692", "#92e1c0", "#9fe1e7", "#9fc6e7", "#4986e7",
+  "#9a9cff", "#b99aff", "#a47ae2", "#cd74e6", "#f691b2", "#cca6ac", "#cabdbf", "#434343",
+];
 
 export function FormatBytes(bytes: number) {
   if (bytes < 1024) return `${bytes} B`;

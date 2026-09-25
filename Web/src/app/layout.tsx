@@ -13,6 +13,9 @@ export const metadata: Metadata = {
   title: "Cloud",
   description: "Domácí cloud — soubory, sdílení, správa uživatelů.",
   robots: { index: false, follow: false },
+  manifest: "/manifest.webmanifest",
+  icons: { icon: "/icons/icon-192.png", apple: "/icons/apple-touch-icon.png" },
+  appleWebApp: { capable: true, title: "Cloud", statusBarStyle: "black-translucent" },
 };
 
 export const viewport: Viewport = {

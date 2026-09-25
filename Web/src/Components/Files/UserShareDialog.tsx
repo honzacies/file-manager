@@ -77,13 +77,16 @@ export function UserShareDialog({
   const [permission, setPermission] = useState<Key>("read");
   const [pending, setPending] = useState(false);
 
+  // Na cestě, ne na objektu `target` — rodič ho posílá nový při každém renderu a efekt níž
+  // by se pak točil dokola.
+  const targetPath = target?.path;
   const Load = useCallback(() => {
-    if (!target) return;
-    ApiFetch<Recipient[]>(`/api/user-shares${Query({ path: target.path, all })}`).then((result) => {
+    if (targetPath === undefined) return;
+    ApiFetch<Recipient[]>(`/api/user-shares${Query({ path: targetPath, all })}`).then((result) => {
       if (result.ok) setRecipients(result.body);
       else toast.danger(ErrorText(result));
     });
-  }, [target, all]);
+  }, [targetPath, all]);
 
   useEffect(() => {
     if (!isOpen) return;

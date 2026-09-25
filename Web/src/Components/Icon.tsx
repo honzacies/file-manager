@@ -4,16 +4,18 @@ export function Icon({
   name,
   className,
   filled,
+  style,
 }: {
   name: string;
   className?: string;
   filled?: boolean;
+  style?: React.CSSProperties;
 }) {
   return (
     <span
       aria-hidden
       className={`material-symbols-outlined select-none ${className ?? ""}`}
-      style={filled ? { fontVariationSettings: "'FILL' 1" } : undefined}
+      style={{ ...(filled && { fontVariationSettings: "'FILL' 1" }), ...style }}
     >
       {name}
     </span>

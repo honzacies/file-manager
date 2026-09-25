@@ -30,7 +30,25 @@ export interface ItemHandlers {
   // přetažení položek (názvy) do složky
   onDropInto: (folder: string, names: string[]) => void;
   thumbUrl?: (entry: Entry) => string;
+  isOffline?: (entry: Entry) => boolean;
   readOnly?: boolean;
+}
+
+// Název s odznaky. Ve výsledcích hledání je `name` cesta ("2024/leto.jpg") → složka šedě před názvem.
+function NameLabel({ entry, handlers, className = "" }: { entry: Entry; handlers: ItemHandlers; className?: string }) {
+  const slash = entry.name.lastIndexOf("/");
+  const base = entry.name.slice(slash + 1);
+  const parent = slash > 0 ? entry.name.slice(0, slash) : "";
+  return (
+    <span className={`flex min-w-0 items-center gap-1 ${className}`}>
+      <span className="truncate" title={entry.name}>
+        {parent && <span className="text-muted">{parent}/</span>}
+        {base}
+      </span>
+      {entry.starred && <Icon name="star" filled className="shrink-0 text-[15px] text-amber-400" />}
+      {handlers.isOffline?.(entry) && <Icon name="offline_pin" filled className="shrink-0 text-[15px] text-success" />}
+    </span>
+  );
 }
 
 function ClickMode(event: React.MouseEvent) {
@@ -125,11 +143,9 @@ function ListRow({ entry, handlers }: { entry: Entry; handlers: ItemHandlers }) 
     >
       {!handlers.readOnly && <SelectBox entry={entry} handlers={handlers} />}
       <div className="flex min-w-0 items-center gap-3">
-        <FileIcon name={entry.name} isDir={entry.isDir} className="shrink-0 text-[24px]" />
+        <FileIcon name={entry.name} isDir={entry.isDir} color={entry.color} className="shrink-0 text-[24px]" />
         <div className="min-w-0">
-          <p className="truncate text-sm" title={entry.name}>
-            {entry.name}
-          </p>
+          <NameLabel entry={entry} handlers={handlers} className="text-sm" />
           {/* na mobilu metadata pod názvem místo sloupců */}
           <p className="text-xs text-muted sm:hidden">
             {FormatDate(entry.modified)}
@@ -160,13 +176,11 @@ function GridTile({ entry, handlers }: { entry: Entry; handlers: ItemHandlers })
           // ponytail: náhled = originál s loading="lazy"; generovat miniatury, až to bude na mobilních datech pomalé
           <img src={handlers.thumbUrl?.(entry)} alt="" loading="lazy" draggable={false} className="h-full w-full object-cover" />
         ) : (
-          <FileIcon name={entry.name} isDir={entry.isDir} className="text-[48px]" />
+          <FileIcon name={entry.name} isDir={entry.isDir} color={entry.color} className="text-[48px]" />
         )}
       </div>
       <div className="flex items-center gap-1 py-1.5 pr-1 pl-3">
-        <p className="min-w-0 flex-1 truncate text-sm" title={entry.name}>
-          {entry.name}
-        </p>
+        <NameLabel entry={entry} handlers={handlers} className="flex-1 text-sm" />
         <MoreButton label={`Akce pro ${entry.name}`} actions={handlers.actionsFor(entry)} onAction={(id) => handlers.onAction(entry, id)} />
       </div>
       {!handlers.readOnly && (

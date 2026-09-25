@@ -110,7 +110,8 @@ export async function ShareRoutes(app: FastifyInstance) {
       isDir: stat.isDirectory(),
       path: rel,
       size: stat.isDirectory() ? 0 : stat.size,
-      entries: stat.isDirectory() ? await ListDir(abs, false) : [],
+      // Barvy složek ano, hvězdičky ne — ty jsou osobní.
+      entries: stat.isDirectory() ? await ListDir(abs, false, path.relative(GetRootDir(), abs).split(path.sep).join("/")) : [],
     };
   });
 

@@ -319,6 +319,65 @@ try {
     assert.ok(!incoming.some((s: { id: number }) => s.id === shareId));
   });
 
+  await Check("ZIP: složka se stáhne celá, koš ani cizí soubory v něm nejsou", async () => {
+    const zip = await app.inject({ url: "/api/files/zip?paths=Archiv", headers: alice });
+    assert.equal(zip.statusCode, 200);
+    assert.match(String(zip.headers["content-type"]), /application\/zip/);
+    assert.equal(zip.rawPayload.subarray(0, 2).toString(), "PK");
+    assert.ok(zip.rawPayload.includes("Archiv/Spolecne/doc.txt"));
+    const escape = await app.inject({ url: `/api/files/zip?paths=${encodeURIComponent("../bob")}`, headers: alice });
+    assert.ok(!escape.rawPayload.includes("bob/"), "ZIP vylezl ze složky");
+    const all = await app.inject({ url: "/api/files/zip?paths=&all=true", headers: admin });
+    assert.ok(!all.rawPayload.includes(".trash/"), "ZIP obsahuje koš");
+    assert.equal((await app.inject({ url: "/api/files/zip?paths=Archiv&all=true", headers: bob2 })).statusCode, 404, "bob zazipoval cizí složku");
+  });
+
+  await Check("kopie, barva složky, hvězdička, nedávné, hledání, podrobnosti", async () => {
+    const copy = await app.inject({ method: "POST", url: "/api/files/copy", headers: alice, payload: { paths: ["novy.txt"] } });
+    assert.deepEqual(copy.json().names, ["novy (kopie).txt"]);
+    assert.equal(readFileSync(path.join(aliceHome, "novy (kopie).txt"), "utf8"), "n");
+
+    const color = (c: unknown, p = "Archiv", h = alice) => app.inject({ method: "POST", url: "/api/files/color", headers: h, payload: { paths: [p], color: c } });
+    assert.equal((await color("#FF0000")).statusCode, 200);
+    assert.equal((await color("red")).statusCode, 400);
+    assert.equal((await color("#00ff00", "novy.txt")).statusCode, 400);
+    await app.inject({ method: "POST", url: "/api/files/rename", headers: alice, payload: { path: "Archiv", name: "Archiv2" } });
+    const listed = (await app.inject({ url: "/api/files", headers: alice })).json().entries.find((e: { name: string }) => e.name === "Archiv2");
+    assert.equal(listed.color, "#ff0000", "barva se po přejmenování ztratila");
+
+    await app.inject({ method: "POST", url: "/api/files/star", headers: alice, payload: { paths: ["novy.txt"], starred: true } });
+    const starred = (await app.inject({ url: "/api/starred", headers: alice })).json();
+    assert.ok(starred.some((item: { name: string; path: string }) => item.name === "novy.txt" && item.path === "novy.txt"));
+    assert.ok(!(await app.inject({ url: "/api/starred", headers: bob2 })).body.includes("novy.txt\",\"isDir\":false,\"size\":1,\"modified\""), "bob vidí cizí hvězdičky");
+
+    // Nahrání se do Nedávné zapisuje taky — začít s čistým seznamem, ať se měří jen stažení.
+    Db.prepare("DELETE FROM recent WHERE user_id = (SELECT id FROM users WHERE username = 'alice')").run();
+    await app.inject({ url: "/api/files/download?path=novy.txt", headers: alice });
+    await app.inject({ url: "/api/files/download?path=maly.bin&inline=true&thumb=true", headers: alice });
+    const recent = (await app.inject({ url: "/api/recent", headers: alice })).json().map((item: { name: string }) => item.name);
+    assert.ok(recent.includes("novy.txt"));
+    assert.ok(!recent.includes("maly.bin"), "náhled v mřížce se zapsal do Nedávné");
+
+    const search = (await app.inject({ url: "/api/files/search?q=DOC", headers: alice })).json().entries.map((e: { name: string }) => e.name);
+    assert.ok(search.includes("Archiv2/Spolecne/doc.txt"));
+    const bobSearch = await app.inject({ url: `/api/files/search?q=doc&path=${encodeURIComponent("../alice")}`, headers: bob2 });
+    assert.ok(!bobSearch.body.includes("Spolecne"), "hledání vylezlo ze složky");
+
+    const details = (await app.inject({ url: "/api/files/details?path=Archiv2", headers: alice })).json();
+    assert.equal(details.isDir, true);
+    assert.ok(details.files >= 1 && details.folders >= 1);
+    assert.equal(details.owner, "alice");
+  });
+
+  await Check("sdílení jen pro čtení: kopie a barva zakázané, hvězdička povolená", async () => {
+    const file = (await app.inject({ url: "/api/user-shares/incoming", headers: bob2 })).json().find((s: { name: string }) => s.name === "novy.txt");
+    assert.equal((await app.inject({ method: "POST", url: "/api/files/copy", headers: bob2, payload: { paths: [""], share: file.id } })).statusCode, 403);
+    const star = await app.inject({ method: "POST", url: "/api/files/star", headers: bob2, payload: { paths: [""], share: file.id, starred: true } });
+    assert.equal(star.statusCode, 200);
+    const bobStarred = (await app.inject({ url: "/api/starred", headers: bob2 })).json();
+    assert.ok(bobStarred.some((item: { share: number }) => item.share === file.id));
+  });
+
   await Check("rate limit na přihlášení", async () => {
     let limited = false;
     for (let i = 0; i < 15; i++) {

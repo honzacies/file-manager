@@ -9,7 +9,8 @@ import { FormatBytes } from "@/lib/format";
 import { Brand } from "./Brand";
 import { Icon } from "./Icon";
 import { NotificationBell } from "./Notifications";
-import { useUser } from "./Session";
+import { ForgetUser, useUser } from "./Session";
+import { ClearOffline } from "@/lib/offline";
 import { ThemeToggle } from "./ThemeToggle";
 import { useUploads } from "./Uploads";
 import { UserAvatar } from "./UserAvatar";
@@ -87,14 +88,20 @@ function SidebarBody({ onNavigate }: { onNavigate?: () => void }) {
 
   async function Logout() {
     await ApiFetch("/api/auth/logout", "POST");
+    // Na sdíleném počítači nemá po odhlášení nic zůstat.
+    ForgetUser();
+    await ClearOffline();
     router.replace("/login/");
   }
 
   const main: NavItem[] = [
     { href: "/files/", label: "Moje soubory", icon: "folder" },
+    { href: "/recent/", label: "Nedávné", icon: "schedule" },
+    { href: "/starred/", label: "S hvězdičkou", icon: "star" },
     ...(user.role === "admin" ? [{ href: "/files/", label: "Všechny soubory", icon: "folder_supervised", all: true }] : []),
     { href: "/shared/", label: "Sdíleno se mnou", icon: "folder_shared" },
     { href: "/shares/", label: "Moje sdílení", icon: "share" },
+    { href: "/offline/", label: "Offline", icon: "offline_pin" },
     { href: "/trash/", label: "Koš", icon: "delete" },
   ];
   const admin: NavItem[] = [

@@ -1,6 +1,7 @@
 # Cloud
 
-Domácí cloud: soubory, uživatelé, kvóty, koš, sdílení s uživateli (s notifikacemi) i odkazem, náhledy (obrázky, video, audio, PDF, text).
+Domácí cloud: soubory, uživatelé, kvóty, koš, sdílení s uživateli (s notifikacemi) i odkazem, náhledy (obrázky, video, audio, PDF, text),
+ZIP stažení složek, barvy složek, hvězdičky, Nedávné, hledání v podsložkách a offline soubory (PWA).
 Běží jako jeden Docker kontejner — Fastify API servíruje i statický export Next.js webu.
 
 ```
@@ -30,7 +31,7 @@ Soubory leží na disku normálně jako `<CLOUD_DIR>/<username>/…`, smazané v
 cd Api && npm i && npm run dev        # API na :8080, data v ./data a ./cloud
 cd Web && npm i && npm run dev        # web na :3000, /api se přeposílá na API (API_URL)
 cd Api && npm run create-admin -- honza   # heslo ze stdin
-cd Api && npm run verify              # bezpečnostní self-check (22 kontrol přes app.inject)
+cd Api && npm run verify              # bezpečnostní self-check (25 kontrol přes app.inject)
 ```
 
 ## Bezpečnost v kostce
@@ -43,8 +44,8 @@ cd Api && npm run verify              # bezpečnostní self-check (22 kontrol p�
 
 ## Vědomě vynecháno
 
-- Stažení složky jako ZIP — přidat, až bude chybět (`archiver`).
 - Miniatury — grid načítá originály s `loading="lazy"`; generovat až bude pomalé.
-- Verze souborů, HTTPS (přes Tailscale lze `tailscale serve`).
+- Verze souborů, zástupci, pracovní prostory.
+- Offline a instalace jako aplikace fungují jen přes HTTPS (`tailscale serve`), na `http://IP:8080` je prohlížeč nedovolí.
 - Kvóta hlídá jen upload do vlastní složky: koš se nepočítá a admin v „Všech souborech“ ji obchází.
 - Notifikace jen v appce (dotaz každých 30 s), ne push při zavřeném prohlížeči.
