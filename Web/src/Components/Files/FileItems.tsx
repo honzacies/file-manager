@@ -35,6 +35,8 @@ export interface ItemHandlers {
   focused: string | null;
   // modifikátory z události: ctrl/meta přidá, shift rozsah
   onSelect: (name: string, mode: "replace" | "toggle" | "range") => void;
+  // nastavit konkrétní stav (tažení přes checkboxy); bez něj se tažením neoznačuje
+  setChecked?: (name: string, checked: boolean) => void;
   onOpen: (entry: Entry) => void;
   onContextMenu: (entry: Entry, event: React.MouseEvent) => void;
   actionsFor: (entry: Entry) => Action[];
@@ -78,6 +80,19 @@ function ClickMode(event: React.MouseEvent) {
 }
 
 // Společné chování řádku v seznamu i dlaždice v mřížce.
+// "Malování" výběru: stisk na checkboxu + tažení přes další položky jim nastaví stejný stav
+// (první byl prázdný -> označuje, byl zaškrtnutý -> odznačuje). Jedno tažení naráz, stačí modul.
+let paint: { checked: boolean } | null = null;
+
+function StartPaint(entry: Entry, handlers: ItemHandlers, event: React.PointerEvent) {
+  if (!handlers.setChecked || event.button !== 0 || event.pointerType === "touch") return;
+  // bez tohohle by prohlížeč začal táhnout celý řádek (drag & drop) nebo označovat text
+  event.preventDefault();
+  paint = { checked: !handlers.selected.has(entry.name) };
+  handlers.setChecked(entry.name, paint.checked);
+  window.addEventListener("pointerup", () => (paint = null), { once: true });
+}
+
 function useItemProps(entry: Entry, handlers: ItemHandlers) {
   const selected = handlers.selected.has(entry.name);
   return {
@@ -97,6 +112,12 @@ function useItemProps(entry: Entry, handlers: ItemHandlers) {
       handlers.onSelect(entry.name, mode === "replace" && handlers.selected.size ? "toggle" : mode);
     },
     onDoubleClick: () => handlers.onOpen(entry),
+    // `buttons & 1` = levé tlačítko pořád drží (pointerup mimo okno by jinak nechal malování zapnuté)
+    onPointerEnter: (event: React.PointerEvent) => {
+      if (!paint) return;
+      if (event.buttons & 1) handlers.setChecked?.(entry.name, paint.checked);
+      else paint = null;
+    },
     onContextMenu: (event: React.MouseEvent) => handlers.onContextMenu(entry, event),
     onDragStart: (event: React.DragEvent) => {
       const names = selected ? [...handlers.selected] : [entry.name];
@@ -142,7 +163,20 @@ function SortHeader({ label, sortKey, sort, onSort, className = "" }: { label: s
 function SelectBox({ entry, handlers }: { entry: Entry; handlers: ItemHandlers }) {
   return (
     // biome-ignore lint/a11y/noStaticElementInteractions: jen zastaví klik, aby se nepropsal do řádku
-    <span onClick={(event) => event.stopPropagation()} onDoubleClick={(event) => event.stopPropagation()} className="flex">
+    <span
+      onPointerDown={(event) => StartPaint(entry, handlers, event)}
+      onClickCapture={(event) => {
+        // Myší klik už stav nastavil v StartPaint — label by ho jinak přepnul zpátky.
+        // Klávesnice (mezerník, detail = 0) jde dál přes onChange.
+        if (handlers.setChecked && event.detail > 0 && (event.nativeEvent as PointerEvent).pointerType !== "touch") {
+          event.preventDefault();
+          event.stopPropagation();
+        }
+      }}
+      onClick={(event) => event.stopPropagation()}
+      onDoubleClick={(event) => event.stopPropagation()}
+      className="flex"
+    >
       <Checkbox
         aria-label={`Označit ${entry.name}`}
         isSelected={handlers.selected.has(entry.name)}

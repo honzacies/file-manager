@@ -443,6 +443,16 @@ export function FileBrowser() {
     selected,
     focused: anchor,
     onSelect: Select,
+    setChecked: (name, checked) => {
+      setAnchor(name);
+      setSelected((current) => {
+        if (current.has(name) === checked) return current;
+        const next = new Set(current);
+        if (checked) next.add(name);
+        else next.delete(name);
+        return next;
+      });
+    },
     onOpen: Open,
     onContextMenu: (entry, event) => {
       event.preventDefault();
