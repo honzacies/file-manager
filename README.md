@@ -7,7 +7,7 @@
 A self-hosted file manager for your home server: fast, good-looking and ready for the whole family.
 One Docker container, one command to install.
 
-**English** · [Čeština](README.cs.md)
+🇨🇿 [O projektu česky](README.cs.md)
 
 ![Node 24](https://img.shields.io/badge/Node-24-5FA04E?logo=nodedotjs&logoColor=white)
 ![Next.js 16](https://img.shields.io/badge/Next.js-16-000?logo=nextdotjs)

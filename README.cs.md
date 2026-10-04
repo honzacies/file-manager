@@ -7,7 +7,7 @@
 Self-hosted správce souborů pro domácí server — rychlý, hezký a připravený pro celou rodinu.
 Jeden Docker kontejner, jeden příkaz na instalaci.
 
-[English](README.md) · **Čeština**
+🇬🇧 [About the project in English](README.md)
 
 ![Node 24](https://img.shields.io/badge/Node-24-5FA04E?logo=nodedotjs&logoColor=white)
 ![Next.js 16](https://img.shields.io/badge/Next.js-16-000?logo=nextdotjs)
