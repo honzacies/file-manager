@@ -2,6 +2,8 @@ export interface Entry {
   name: string;
   isDir: boolean;
   size: number;
+  // počet položek ve složce
+  items?: number;
   modified: number;
   // barva složky (#rrggbb) a hvězdička přihlášeného uživatele
   color?: string;
@@ -33,6 +35,13 @@ const dateFormat = new Intl.DateTimeFormat("cs-CZ", { day: "numeric", month: "nu
 
 export function FormatDate(ms: number) {
   return dateFormat.format(ms);
+}
+
+// Bez času — na mobilu se celé datum s časem do řádku pod názvem nevejde.
+const shortDateFormat = new Intl.DateTimeFormat("cs-CZ", { day: "numeric", month: "numeric", year: "numeric" });
+
+export function FormatDateShort(ms: number) {
+  return shortDateFormat.format(ms);
 }
 
 export type FileKind = "folder" | "image" | "video" | "audio" | "pdf" | "text" | "archive" | "other";

@@ -145,6 +145,8 @@ export interface Entry {
   name: string;
   isDir: boolean;
   size: number;
+  // počet položek ve složce (jen o úroveň níž)
+  items?: number;
   modified: number;
   color?: string;
   starred?: boolean;
@@ -161,8 +163,10 @@ export async function ListDir(abs: string, isRoot: boolean, dirRel?: string, use
       .map(async (d) => {
         const stat = await fs.stat(path.join(abs, d.name)).catch(() => null);
         if (!stat) return null;
-        const isDir = stat.isDirectory();
-        return { name: d.name, isDir, size: isDir ? 0 : stat.size, modified: stat.mtimeMs };
+        if (!stat.isDirectory()) return { name: d.name, isDir: false, size: stat.size, modified: stat.mtimeMs };
+        const inside = await fs.readdir(path.join(abs, d.name)).catch(() => []);
+        const items = inside.filter((name) => !name.startsWith(UPLOAD_PREFIX)).length;
+        return { name: d.name, isDir: true, size: 0, items, modified: stat.mtimeMs };
       }),
   );
   const list = entries.filter((e) => e !== null);

@@ -11,11 +11,11 @@ import { Icon } from "../Icon";
 import { useOffline } from "../Offline";
 import { PageHeader } from "../PageHeader";
 import { useUser } from "../Session";
-import { useUploads } from "../Uploads";
+import { type UploadRequest, useUploads } from "../Uploads";
 import type { Person } from "../UserAvatar";
 import { type Action, ContextMenu } from "./ActionMenu";
 import { DetailsDialog } from "./DetailsDialog";
-import { DRAG_TYPE, FileItems, type ItemHandlers, type Sort, SortEntries } from "./FileItems";
+import { DRAG_TYPE, FileItems, type ItemHandlers, type Sort, SortEntries, type SortKey } from "./FileItems";
 import { MoveDialog } from "./MoveDialog";
 import { NameDialog } from "./NameDialog";
 import { PathBreadcrumbs } from "./PathBreadcrumbs";
@@ -34,6 +34,9 @@ type DialogState =
   | null;
 
 const VIEW_KEY = "cloud.view";
+
+// Řazení v menu — na mobilu a v mřížce, kde nejsou hlavičky sloupců.
+const SORT_LABELS: Record<SortKey, string> = { name: "Název", modified: "Změněno", size: "Velikost" };
 
 // Sdílení, které mi někdo poslal (z /api/user-shares/incoming).
 interface IncomingShare {
@@ -70,6 +73,9 @@ export function FileBrowser() {
   const [entries, setEntries] = useState<Entry[] | null>(null);
   // login -> jméno a avatar vlastníků z odpovědi API
   const [people, setPeople] = useState<Record<string, Person>>({});
+  // Prohlížeč z dialogu pustí vždycky jen jednu složku (`multiple` se u webkitdirectory ignoruje),
+  // tak se vybrané složky hromadí tady a nahrají se naráz.
+  const [folderPick, setFolderPick] = useState<UploadRequest[]>([]);
   const [truncated, setTruncated] = useState(false);
   const [readOnly, setReadOnly] = useState(false);
   const [shareInfo, setShareInfo] = useState<IncomingShare | null>(null);
@@ -151,6 +157,9 @@ export function FileBrowser() {
     const filtered = (entries ?? []).filter((entry) => !needle || entry.name.toLocaleLowerCase("cs").includes(needle));
     return SortEntries(filtered, sort);
   }, [entries, filter, sort, q]);
+
+  // Názvy vybraných složek (první část cesty) v pořadí výběru.
+  const pickedFolders = useMemo(() => [...new Set(folderPick.map((item) => item.relative.split("/")[0]))], [folderPick]);
 
   const previewable = useMemo(() => visible.filter(CanPreview), [visible]);
   const selectedEntries = visible.filter((entry) => selected.has(entry.name));
@@ -551,7 +560,7 @@ export function FileBrowser() {
         onClear={() => q && Navigate(path)}
         className="w-full max-w-2xl"
       >
-        <SearchField.Group className="h-12 rounded-full! px-2 shadow-sm">
+        <SearchField.Group className="h-11 rounded-full! px-2 shadow-sm sm:h-12">
           <SearchField.SearchIcon className="ml-1" />
           <SearchField.Input ref={searchInput} placeholder={`Hledat v „${folderName}“`} className="text-base" />
           {/* nápověda jen při psaní — Enter spustí hledání i v podsložkách */}
@@ -580,10 +589,45 @@ export function FileBrowser() {
         hidden
         {...{ webkitdirectory: "" }}
         onChange={(event) => {
-          uploads.Enqueue(FilesFromInput(event.target.files), { path, all, share });
+          const picked = FilesFromInput(event.target.files);
+          // Stejná složka vybraná dvakrát se nepřidá znovu.
+          const names = new Set(picked.map((item) => item.relative.split("/")[0]));
+          if (picked.length) setFolderPick((current) => [...current.filter((item) => !names.has(item.relative.split("/")[0])), ...picked]);
           event.target.value = "";
         }}
       />
+
+      {folderPick.length > 0 && (
+        <div className="flex flex-wrap items-center gap-2 rounded-2xl border border-accent/40 bg-accent/10 px-4 py-3">
+          <Icon name="drive_folder_upload" className="text-accent" />
+          <p className="mr-auto min-w-0 text-sm">
+            <b className="break-words">{pickedFolders.join(", ")}</b>
+            <span className="text-muted">
+              {" · "}
+              {folderPick.length} {folderPick.length === 1 ? "soubor" : folderPick.length < 5 ? "soubory" : "souborů"}
+            </span>
+            {/* dialog prohlížeče pustí jen jednu složku, přetažení jich vezme víc naráz */}
+            <span className="block text-xs text-muted max-sm:hidden">Víc složek najednou: označ je v Průzkumníku a přetáhni sem.</span>
+          </p>
+          <Button size="sm" variant="tertiary" onPress={() => folderInput.current?.click()}>
+            <Icon name="add" className="text-[18px]" />
+            Další složka
+          </Button>
+          <Button
+            size="sm"
+            onPress={() => {
+              uploads.Enqueue(folderPick, { path, all, share });
+              setFolderPick([]);
+            }}
+          >
+            <Icon name="upload" className="text-[18px]" />
+            Nahrát
+          </Button>
+          <Button size="sm" isIconOnly variant="tertiary" aria-label="Zrušit výběr složek" onPress={() => setFolderPick([])}>
+            <Icon name="close" className="text-[18px]" />
+          </Button>
+        </div>
+      )}
 
       {/* Lišta výběru nahrazuje řádek s cestou — stejná výška, seznam neposkočí. */}
       <div className="flex min-h-10 flex-wrap items-center gap-3">
@@ -625,9 +669,35 @@ export function FileBrowser() {
           </div>
         ) : (
           <>
-            <div className="min-w-0 flex-1">
+            <div className="min-w-0 flex-1 overflow-hidden">
               <PathBreadcrumbs path={path} rootLabel={rootTitle} onNavigate={(next) => Navigate(next)} />
             </div>
+            <Dropdown>
+              {/* V seznamu na širší obrazovce se řadí klikem na hlavičku sloupce. */}
+              <Button size="sm" variant="tertiary" aria-label={`Řadit podle: ${SORT_LABELS[sort.key]}`} className={view === "grid" ? "" : "sm:hidden"}>
+                <Icon name="swap_vert" className="text-[18px]" />
+                {/* Na mobilu jen ikony — na název sloupce v řádku s cestou není místo. */}
+                <span className="hidden sm:inline">{SORT_LABELS[sort.key]}</span>
+                <Icon name={sort.dir === 1 ? "arrow_upward" : "arrow_downward"} className="-mr-1 text-[16px] text-muted" />
+              </Button>
+              <Dropdown.Popover placement="bottom end">
+                <Dropdown.Menu
+                  aria-label="Řadit podle"
+                  // Stejný sloupec znovu = obrátit směr (jako klik na hlavičku).
+                  onAction={(key) => setSort((current) => ({ key: key as SortKey, dir: current.key === key ? ((current.dir * -1) as 1 | -1) : 1 }))}
+                >
+                  {(Object.keys(SORT_LABELS) as SortKey[]).map((key) => (
+                    <Dropdown.Item key={key} id={key} textValue={SORT_LABELS[key]}>
+                      <Icon
+                        name={sort.dir === 1 ? "arrow_upward" : "arrow_downward"}
+                        className={`text-[18px] text-muted ${sort.key === key ? "" : "invisible"}`}
+                      />
+                      <Label>{SORT_LABELS[key]}</Label>
+                    </Dropdown.Item>
+                  ))}
+                </Dropdown.Menu>
+              </Dropdown.Popover>
+            </Dropdown>
             <ToggleButtonGroup
               aria-label="Zobrazení"
               selectionMode="single"

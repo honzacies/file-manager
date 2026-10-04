@@ -2,7 +2,7 @@
 
 import { Checkbox } from "@heroui/react";
 import { type ReactNode, useState } from "react";
-import { type Entry, FormatBytes, FormatDate, HasThumb, KindOf } from "@/lib/format";
+import { type Entry, FormatBytes, FormatDate, FormatDateShort, HasThumb, KindOf } from "@/lib/format";
 import { FileIcon } from "../FileIcon";
 import { Icon } from "../Icon";
 import { type Person, PersonLabel, UserAvatar } from "../UserAvatar";
@@ -84,10 +84,6 @@ function ClickMode(event: React.MouseEvent) {
 // (první byl prázdný -> označuje, byl zaškrtnutý -> odznačuje). Jedno tažení naráz, stačí modul.
 let paint: { checked: boolean } | null = null;
 
-// ponytail: pevná prodleva místo systémového nastavení dvojkliku (prohlížeč ho nezveřejňuje)
-const DOUBLE_CLICK_MS = 250;
-let openTimer = 0;
-
 function StartPaint(entry: Entry, handlers: ItemHandlers, event: React.PointerEvent) {
   if (!handlers.setChecked || event.button !== 0 || event.pointerType === "touch") return;
   // bez tohohle by prohlížeč začal táhnout celý řádek (drag & drop) nebo označovat text
@@ -108,16 +104,15 @@ function useItemProps(entry: Entry, handlers: ItemHandlers) {
     draggable: !handlers.readOnly,
     onClick: (event: React.MouseEvent) => {
       // Veřejné sdílení nemá výběr — klik rovnou otevírá.
-      if (handlers.readOnly) return handlers.onOpen(entry);
-      // Ctrl/Shift klik označuje (přidá / rozsah).
+      // Na dotyku bez výběru ťuknutí rovnou otevírá (dvojklik prstem je nepohodlný).
+      if (handlers.readOnly || ((event.nativeEvent as PointerEvent).pointerType === "touch" && !handlers.selected.size)) return handlers.onOpen(entry);
+      // Klik označuje, dvojklik otevírá. Když už je něco označené, klik položku jen přidá/odebere —
+      // výběr se tak nedá omylem "odkliknout". Druhý klik dvojkliku (detail 2) výběr nemění.
+      if (event.detail > 1) return;
       const mode = ClickMode(event);
-      if (mode !== "replace") return handlers.onSelect(entry.name, mode);
-      // Jeden klik otevírá, dvojklik označuje. Otevření čeká, jestli nepřijde druhý klik —
-      // jinak by se složka otevřela dřív, než dvojklik doběhne.
-      window.clearTimeout(openTimer);
-      if (event.detail > 1) return handlers.onSelect(entry.name, "toggle");
-      openTimer = window.setTimeout(() => handlers.onOpen(entry), DOUBLE_CLICK_MS);
+      handlers.onSelect(entry.name, mode === "replace" && handlers.selected.size ? "toggle" : mode);
     },
+    onDoubleClick: () => handlers.onOpen(entry),
     // `buttons & 1` = levé tlačítko pořád drží (pointerup mimo okno by jinak nechal malování zapnuté)
     onPointerEnter: (event: React.PointerEvent) => {
       if (!paint) return;
@@ -170,7 +165,8 @@ function SelectBox({ entry, handlers }: { entry: Entry; handlers: ItemHandlers }
   return (
     // biome-ignore lint/a11y/noStaticElementInteractions: jen zastaví klik, aby se nepropsal do řádku
     <span
-      onPointerDown={(event) => StartPaint(entry, handlers, event)}
+      // capture: checkbox (react-aria usePress) zastaví bublání pointerdown, wrapper by ho neviděl
+      onPointerDownCapture={(event) => StartPaint(entry, handlers, event)}
       onClickCapture={(event) => {
         // Myší klik už stav nastavil v StartPaint — label by ho jinak přepnul zpátky.
         // Klávesnice (mezerník, detail = 0) jde dál přes onChange.
@@ -199,6 +195,10 @@ function SelectBox({ entry, handlers }: { entry: Entry; handlers: ItemHandlers }
   );
 }
 
+// U složky počet položek uvnitř místo velikosti (velikost = průchod celým stromem).
+const SizeLabel = (entry: Entry) =>
+  entry.isDir ? `${entry.items ?? 0} ${entry.items === 1 ? "položka" : entry.items && entry.items < 5 ? "položky" : "položek"}` : FormatBytes(entry.size);
+
 function ListRow({ entry, handlers }: { entry: Entry; handlers: ItemHandlers }) {
   const props = useItemProps(entry, handlers);
   const selected = props["aria-selected"];
@@ -220,16 +220,16 @@ function ListRow({ entry, handlers }: { entry: Entry; handlers: ItemHandlers }) 
         <div className="min-w-0">
           <NameLabel entry={entry} handlers={handlers} className="text-sm" />
           {/* na mobilu metadata pod názvem místo sloupců */}
-          <p className="text-xs text-muted sm:hidden">
-            {handlers.ownerOf && `${handlers.ownerOf(entry)?.name ?? "—"} · `}
-            {FormatDate(entry.modified)}
-            {!entry.isDir && ` · ${FormatBytes(entry.size)}`}
+          <p className="truncate text-xs text-muted sm:hidden">
+            {FormatDateShort(entry.modified)}
+            {` · ${SizeLabel(entry)}`}
+            {handlers.ownerOf && ` · ${handlers.ownerOf(entry)?.name ?? "—"}`}
           </p>
         </div>
       </div>
       {handlers.ownerOf && <PersonLabel person={handlers.ownerOf(entry)} className="hidden text-xs md:flex" />}
       <span className="hidden text-xs text-muted tabular-nums sm:block">{FormatDate(entry.modified)}</span>
-      <span className="hidden text-right text-xs text-muted tabular-nums sm:block">{entry.isDir ? "—" : FormatBytes(entry.size)}</span>
+      <span className="hidden text-right text-xs text-muted tabular-nums sm:block">{SizeLabel(entry)}</span>
       <MoreButton label={`Akce pro ${entry.name}`} actions={handlers.actionsFor(entry)} onAction={(id) => handlers.onAction(entry, id)} />
     </div>
   );
@@ -331,12 +331,14 @@ export function FileItems({
   );
 }
 
+const SizeOf = (entry: Entry) => (entry.isDir ? (entry.items ?? 0) : entry.size);
+
 export function SortEntries(entries: Entry[], sort: Sort) {
   return [...entries].sort((a, b) => {
     // složky vždy nahoře
     if (a.isDir !== b.isDir) return a.isDir ? -1 : 1;
     const diff =
-      sort.key === "name" ? a.name.localeCompare(b.name, "cs", { numeric: true }) : sort.key === "size" ? a.size - b.size : a.modified - b.modified;
+      sort.key === "name" ? a.name.localeCompare(b.name, "cs", { numeric: true }) : sort.key === "size" ? SizeOf(a) - SizeOf(b) : a.modified - b.modified;
     return diff * sort.dir || a.name.localeCompare(b.name, "cs", { numeric: true });
   });
 }
