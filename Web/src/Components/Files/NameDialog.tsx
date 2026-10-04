@@ -3,6 +3,7 @@
 import { Button, FieldError, Form, Input, Label, TextField } from "@heroui/react";
 import { useState } from "react";
 import { AppDialog } from "../AppDialog";
+import { t } from "@/lib/i18n";
 
 // Nová složka i přejmenování. Při přejmenování souboru se označí jen název bez přípony.
 export function NameDialog({
@@ -47,8 +48,8 @@ function NameForm({
   async function Submit(event: React.FormEvent) {
     event.preventDefault();
     const trimmed = name.trim();
-    if (!trimmed) return setError("Zadej název.");
-    if (/[/\\]/.test(trimmed)) return setError("Název nesmí obsahovat / ani \\.");
+    if (!trimmed) return setError(t("Enter a name.", "Zadej název."));
+    if (/[/\\]/.test(trimmed)) return setError(t("The name can't contain / or \\.", "Název nesmí obsahovat / ani \\."));
     setPending(true);
     const result = await onSubmit(trimmed);
     setPending(false);
@@ -58,7 +59,7 @@ function NameForm({
   return (
     <Form onSubmit={Submit} className="flex flex-col gap-5">
       <TextField value={name} onChange={(value) => (setName(value), setError(null))} isInvalid={!!error} autoFocus>
-        <Label>Název</Label>
+        <Label>{t("Name", "Název")}</Label>
         <Input
           autoComplete="off"
           onFocus={(event) => {
@@ -71,7 +72,7 @@ function NameForm({
       </TextField>
       <div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
         <Button variant="tertiary" onPress={onCancel}>
-          Zrušit
+          {t("Cancel", "Zrušit")}
         </Button>
         <Button type="submit" isPending={pending}>
           {confirmLabel}

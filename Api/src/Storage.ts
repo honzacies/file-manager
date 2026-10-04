@@ -6,6 +6,7 @@ import type { FastifyReply, FastifyRequest } from "fastify";
 import type { SessionUser } from "./Auth.ts";
 import { Db, GetSetting } from "./Db.ts";
 import { Env } from "./Env.ts";
+import { T } from "./Lang.ts";
 
 export class HttpError extends Error {
   status: number;
@@ -53,7 +54,7 @@ export function GetView(user: SessionUser, scope: Scope = {}): View {
       FROM user_shares s JOIN users u ON u.id = s.owner_id
       WHERE s.id = ? AND s.recipient_id = ?
     `).get(scope.share, user.id) as { owner_id: number; path: string; is_dir: number; can_write: number; owner: string } | undefined;
-    if (!row) throw new HttpError(404, "Sdílení neexistuje nebo ti bylo odebráno.");
+    if (!row) throw new HttpError(404, T("This share does not exist or was removed.", "Sdílení neexistuje nebo ti bylo odebráno."));
     const base = path.join(root, ...row.path.split("/"));
     return {
       root,
@@ -90,7 +91,7 @@ export const RelFromRoot = (root: string, abs: string) => path.relative(root, ab
 export const RelToRoot = (view: View, abs: string) => RelFromRoot(view.root, abs);
 
 export function AssertWritable(view: View) {
-  if (view.readOnly) throw new HttpError(403, "Tohle sdílení je jen pro čtení.");
+  if (view.readOnly) throw new HttpError(403, T("This share is read-only.", "Tohle sdílení je jen pro čtení."));
 }
 
 // Cesta od klienta -> absolutní cesta uvnitř `view.base`.
@@ -98,7 +99,7 @@ export function AssertWritable(view: View) {
 // "a/b/../c/" -> "a/c"
 // ponytail: symlinky se neřeší — vytvořit je může jen někdo s přístupem na server, a ten je důvěryhodný.
 export function Resolve(view: Pick<View, "base" | "prefix">, clientPath = "") {
-  if (clientPath.includes("\0")) throw new HttpError(400, "Neplatná cesta.");
+  if (clientPath.includes("\0")) throw new HttpError(400, T("Invalid path.", "Neplatná cesta."));
   const rel = path.posix.normalize(`/${clientPath.replaceAll("\\", "/")}`).replace(/^\/+|\/+$/g, "");
   const abs = rel ? path.join(view.base, ...rel.split("/")) : view.base;
   const relToRoot = [view.prefix, rel].filter(Boolean).join("/");
@@ -109,7 +110,7 @@ export function ValidName(name: unknown): string {
   const value = typeof name === "string" ? name.trim() : "";
   // limit 255 bajtů (ne znaků) — tolik unese název souboru na ext4; "ž" jsou 2 bajty
   if (!value || value === "." || value === ".." || Buffer.byteLength(value) > 255 || /[/\\\0]/.test(value) || value.startsWith(UPLOAD_PREFIX)) {
-    throw new HttpError(400, "Neplatný název.");
+    throw new HttpError(400, T("Invalid name.", "Neplatný název."));
   }
   return value;
 }
@@ -137,7 +138,7 @@ export async function MovePath(from: string, to: string) {
 
 export async function StatOrThrow(abs: string) {
   const stat = await fs.stat(abs).catch(() => null);
-  if (!stat) throw new HttpError(404, "Soubor nebo složka neexistuje.");
+  if (!stat) throw new HttpError(404, T("File or folder not found.", "Soubor nebo složka neexistuje."));
   return stat;
 }
 
@@ -235,7 +236,8 @@ export async function AssertQuota(view: View, incoming: number) {
   if (quota === null) return;
   const used = await DirSize(view.home);
   if (used + incoming > quota) {
-    throw new HttpError(413, `Nedostatek místa. Limit je ${FormatGb(quota)}, zbývá ${FormatGb(Math.max(0, quota - used))}.`);
+    const [limit, left] = [FormatGb(quota), FormatGb(Math.max(0, quota - used))];
+    throw new HttpError(413, T(`Not enough space. The limit is ${limit}, ${left} left.`, `Nedostatek místa. Limit je ${limit}, zbývá ${left}.`));
   }
 }
 
@@ -252,7 +254,7 @@ export function RewritePaths(oldRel: string, newRel: string) {
 
 // 1234567890 -> "1,1 GB"
 function FormatGb(bytes: number) {
-  return `${(bytes / 1024 ** 3).toLocaleString("cs-CZ", { maximumFractionDigits: 1 })} GB`;
+  return `${(bytes / 1024 ** 3).toLocaleString(T("en-US", "cs-CZ"), { maximumFractionDigits: 1 })} GB`;
 }
 
 // ---- Koš ----------------------------------------------------------------
@@ -332,7 +334,7 @@ export function SendThumb(reply: FastifyReply, file: string) {
 
 export async function SendFile(request: FastifyRequest, reply: FastifyReply, abs: string, inline: boolean) {
   const stat = await StatOrThrow(abs);
-  if (stat.isDirectory()) throw new HttpError(400, "Složku zatím nejde stáhnout, jen jednotlivé soubory.");
+  if (stat.isDirectory()) throw new HttpError(400, T("Folders can't be downloaded this way, only single files.", "Složku zatím nejde stáhnout, jen jednotlivé soubory."));
 
   const name = path.basename(abs);
   const ext = ExtensionOf(name);

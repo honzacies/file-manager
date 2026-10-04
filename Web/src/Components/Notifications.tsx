@@ -6,6 +6,7 @@ import { createContext, type ReactNode, use, useCallback, useEffect, useRef, use
 import { ApiFetch, Query } from "@/lib/api";
 import { FormatDate } from "@/lib/format";
 import { Icon } from "./Icon";
+import { Plural, t } from "@/lib/i18n";
 
 interface Notification {
   id: number;
@@ -80,21 +81,21 @@ export function NotificationBell() {
   return (
     <Badge.Anchor>
     <Popover isOpen={open} onOpenChange={setOpen}>
-      <Button isIconOnly variant="tertiary" aria-label={unread ? `Notifikace, ${unread} ${unread === 1 ? "nová" : unread < 5 ? "nové" : "nových"}` : "Notifikace"}>
+      <Button isIconOnly variant="tertiary" aria-label={unread ? `${t("Notifications", "Notifikace")}, ${unread} ${Plural(unread, ["new", "new"], ["nová", "nové", "nových"])}` : t("Notifications", "Notifikace")}>
         <Icon name="notifications" filled={unread > 0} className="text-[22px]" />
       </Button>
       <Popover.Content placement="bottom start" className="w-[22rem]! max-w-[calc(100vw-2rem)]!">
         <Popover.Dialog className="p-0">
           <div className="flex items-center justify-between gap-2 border-b border-separator px-4 py-3">
-            <Popover.Heading className="text-sm font-semibold">Notifikace</Popover.Heading>
+            <Popover.Heading className="text-sm font-semibold">{t("Notifications", "Notifikace")}</Popover.Heading>
             {unread > 0 && (
               <Button size="sm" variant="ghost" onPress={() => MarkRead()}>
-                Označit vše jako přečtené
+                {t("Mark all as read", "Označit vše jako přečtené")}
               </Button>
             )}
           </div>
           {items.length === 0 ? (
-            <p className="px-4 py-8 text-center text-sm text-muted">Zatím žádné notifikace.</p>
+            <p className="px-4 py-8 text-center text-sm text-muted">{t("No notifications yet.", "Zatím žádné notifikace.")}</p>
           ) : (
             <ul className="max-h-96 overflow-y-auto p-1">
               {items.map((item) => (
@@ -109,7 +110,7 @@ export function NotificationBell() {
                       <span className={`block text-sm ${item.readAt ? "text-muted" : "font-medium"}`}>{item.text}</span>
                       <span className="block text-xs text-muted">{FormatDate(item.createdAt)}</span>
                     </span>
-                    {!item.readAt && <span className="mt-1.5 size-2 shrink-0 rounded-full bg-accent" aria-label="Nepřečteno" />}
+                    {!item.readAt && <span className="mt-1.5 size-2 shrink-0 rounded-full bg-accent" aria-label={t("Unread", "Nepřečteno")} />}
                   </button>
                 </li>
               ))}

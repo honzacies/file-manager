@@ -4,6 +4,7 @@ import { Button, Dropdown, Kbd, Label, Separator } from "@heroui/react";
 import { Fragment, useEffect, useState } from "react";
 import { FOLDER_COLORS } from "@/lib/format";
 import { Icon } from "../Icon";
+import { t } from "@/lib/i18n";
 
 export interface Action {
   id: string;
@@ -21,7 +22,7 @@ export interface Action {
 
 function Items({ actions, onAction, close }: { actions: Action[]; onAction: (id: string) => void; close: () => void }) {
   return (
-    <Dropdown.Menu aria-label="Akce" onAction={(key) => onAction(String(key))}>
+    <Dropdown.Menu aria-label={t("Actions", "Akce")} onAction={(key) => onAction(String(key))}>
       {actions.map((action) => (
         <Fragment key={action.id}>
           {action.separated && <Separator />}
@@ -62,13 +63,13 @@ function Palette({ palette, close }: { palette: NonNullable<Action["palette"]>; 
   };
   return (
     <div className="border-t border-separator px-3 pt-2 pb-3">
-      <p className="mb-2 text-xs text-muted">Barva složky</p>
+      <p className="mb-2 text-xs text-muted">{t("Folder color", "Barva složky")}</p>
       <div className="grid grid-cols-8 gap-1.5">
         {FOLDER_COLORS.map((color) => (
           <button
             key={color}
             type="button"
-            aria-label={`Barva ${color}`}
+            aria-label={`${t("Color", "Barva")} ${color}`}
             aria-pressed={palette.value === color}
             onClick={() => Pick(color)}
             className="grid size-6 place-items-center rounded-full outline-none ring-offset-2 ring-offset-overlay hover:scale-110 focus-visible:ring-2 focus-visible:ring-focus"
@@ -80,7 +81,7 @@ function Palette({ palette, close }: { palette: NonNullable<Action["palette"]>; 
       </div>
       {palette.value && (
         <button type="button" onClick={() => Pick(null)} className="mt-2 text-xs text-muted underline-offset-2 hover:underline">
-          Výchozí barva
+          {t("Default color", "Výchozí barva")}
         </button>
       )}
     </div>
@@ -116,7 +117,7 @@ export function ContextMenu({
   if (!position || !open) return null;
   return (
     <Dropdown key={`${position.x},${position.y}`} isOpen onOpenChange={(isOpen) => !isOpen && onClose()}>
-      <Dropdown.Trigger aria-label="Kontextové menu" className="pointer-events-none fixed size-px opacity-0" style={{ left: position.x, top: position.y }} />
+      <Dropdown.Trigger aria-label={t("Context menu", "Kontextové menu")} className="pointer-events-none fixed size-px opacity-0" style={{ left: position.x, top: position.y }} />
       {/* Nemodální: stránka zůstane klikatelná, takže pravý klik na jinou položku rovnou otevře menu u ní
           (modální popover by zbytek stránky označil jako inert). Zavírá Esc a klik mimo menu. */}
       <Dropdown.Popover placement="bottom start" className="min-w-60" isNonModal>

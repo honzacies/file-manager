@@ -46,7 +46,7 @@ function RunFfmpeg(args: string[]) {
       clearTimeout(timer);
       if (error.code === "ENOENT" && !ffmpegMissing) {
         ffmpegMissing = true;
-        console.warn("ffmpeg není nainstalovaný — náhledy videí a hudby budou jen ikony.");
+        console.warn("ffmpeg is not installed: videos and music will show icons instead of thumbnails.");
       }
       resolve(false);
     });

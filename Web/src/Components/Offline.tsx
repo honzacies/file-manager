@@ -3,6 +3,7 @@
 import { toast } from "@heroui/react";
 import { createContext, type ReactNode, use, useCallback, useEffect, useState } from "react";
 import { ListOffline, OfflineKey, OfflineSupported, RemoveOffline, SaveOffline } from "@/lib/offline";
+import { t } from "@/lib/i18n";
 
 interface OfflineState {
   keys: Set<string>;
@@ -26,19 +27,19 @@ export function OfflineProvider({ children }: { children: ReactNode }) {
   const Toggle = useCallback(
     async (url: string, name: string) => {
       if (!OfflineSupported()) {
-        toast.warning("Offline funguje jen přes HTTPS, třeba přes adresu z tailscale serve.");
+        toast.warning(t("Offline files only work over HTTPS, e.g. the address from tailscale serve.", "Offline funguje jen přes HTTPS, třeba přes adresu z tailscale serve."));
         return;
       }
       if (keys.has(OfflineKey(url))) {
         await RemoveOffline(OfflineKey(url));
-        toast.success(`„${name}“ už není dostupné offline`);
+        toast.success(t(`“${name}” is no longer available offline`, `„${name}“ už není dostupné offline`));
       } else {
-        const id = toast.info(`Ukládám „${name}“ pro offline…`);
+        const id = toast.info(t(`Saving “${name}” for offline…`, `Ukládám „${name}“ pro offline…`));
         try {
           await SaveOffline(url, name);
-          toast.success(`„${name}“ je dostupné offline`);
+          toast.success(t(`“${name}” is available offline`, `„${name}“ je dostupné offline`));
         } catch {
-          toast.danger(`„${name}“ se nepodařilo uložit.`);
+          toast.danger(t(`Couldn't save “${name}”.`, `„${name}“ se nepodařilo uložit.`));
         } finally {
           toast.close(id);
         }

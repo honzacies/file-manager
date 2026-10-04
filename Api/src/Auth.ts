@@ -2,6 +2,7 @@ import { createHash, randomBytes } from "node:crypto";
 import type { FastifyReply, FastifyRequest } from "fastify";
 import { argon2id, argon2Verify } from "hash-wasm";
 import { Db } from "./Db.ts";
+import { T } from "./Lang.ts";
 
 export type Role = "admin" | "user";
 export interface SessionUser {
@@ -74,7 +75,7 @@ export function PurgeExpiredSessions() {
 }
 
 // Heslo přihlášeného uživatele (re-autentizace před citlivou akcí). Špatné -> 403.
-export async function RequireOwnPassword(userId: number, password: string | undefined, message = "Tvoje heslo nesedí.") {
+export async function RequireOwnPassword(userId: number, password: string | undefined, message = T("Your password is incorrect.", "Tvoje heslo nesedí.")) {
   const row = Db.prepare("SELECT password_hash FROM users WHERE id = ?").get(userId) as { password_hash: string } | undefined;
   if (!password || !(await VerifyPassword(row?.password_hash, password))) {
     const error = new Error(message) as Error & { statusCode: number };
@@ -87,7 +88,7 @@ export async function RequireOwnPassword(userId: number, password: string | unde
 export async function RequireUser(request: FastifyRequest, reply: FastifyReply) {
   const user = LookupSession(request.cookies[SESSION_COOKIE]);
   if (!user) {
-    await reply.code(401).send({ error: "Nejsi přihlášený." });
+    await reply.code(401).send({ error: T("You are not signed in.", "Nejsi přihlášený.") });
     return reply;
   }
   request.user = user;
@@ -95,7 +96,7 @@ export async function RequireUser(request: FastifyRequest, reply: FastifyReply) 
 
 export async function RequireAdmin(request: FastifyRequest, reply: FastifyReply) {
   if (request.user.role !== "admin") {
-    await reply.code(403).send({ error: "Na tohle nemáš oprávnění." });
+    await reply.code(403).send({ error: T("You don't have permission to do that.", "Na tohle nemáš oprávnění.") });
     return reply;
   }
 }

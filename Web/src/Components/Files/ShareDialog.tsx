@@ -8,13 +8,16 @@ import { FormatDate } from "@/lib/format";
 import { AppDialog } from "../AppDialog";
 import { CopyField } from "../CopyField";
 import { Icon } from "../Icon";
+import { t } from "@/lib/i18n";
 
-const EXPIRY = [
-  ["never", "Bez omezení"],
-  ["1", "1 den"],
-  ["7", "7 dní"],
-  ["30", "30 dní"],
-] as const;
+// Funkce, ne konstanta — texty se mají vyhodnotit v aktuálním jazyce.
+const Expiry = () =>
+  [
+    ["never", t("No expiry", "Bez omezení")],
+    ["1", t("1 day", "1 den")],
+    ["7", t("7 days", "7 dní")],
+    ["30", t("30 days", "30 dní")],
+  ] as const;
 
 export function ShareDialog({
   isOpen,
@@ -56,18 +59,18 @@ export function ShareDialog({
     <AppDialog
       isOpen={isOpen}
       onOpenChange={onOpenChange}
-      title={`Sdílet „${target?.name ?? ""}“`}
+      title={t(`Share “${target?.name ?? ""}”`, `Sdílet „${target?.name ?? ""}“`)}
       footer={
         link ? (
-          <Button onPress={() => onOpenChange(false)}>Hotovo</Button>
+          <Button onPress={() => onOpenChange(false)}>{t("Done", "Hotovo")}</Button>
         ) : (
           <>
             <Button variant="tertiary" onPress={() => onOpenChange(false)}>
-              Zrušit
+              {t("Cancel", "Zrušit")}
             </Button>
             <Button onPress={Create} isPending={pending}>
               <Icon name="add_link" className="text-[18px]" />
-              Vytvořit odkaz
+              {t("Create link", "Vytvořit odkaz")}
             </Button>
           </>
         )
@@ -75,25 +78,30 @@ export function ShareDialog({
     >
       <div className="flex flex-col gap-4">
         <p className="text-sm text-muted">
-          Kdokoliv s odkazem {target?.isDir ? "uvidí obsah složky a stáhne z ní soubory" : "si soubor zobrazí a stáhne"}, bez přihlášení.
+          {target?.isDir
+            ? t("Anyone with the link can see this folder and download files from it, without signing in.", "Kdokoliv s odkazem uvidí obsah složky a stáhne z ní soubory, bez přihlášení.")
+            : t("Anyone with the link can view and download this file, without signing in.", "Kdokoliv s odkazem si soubor zobrazí a stáhne, bez přihlášení.")}
         </p>
         {link ? (
           <>
-            <CopyField value={link.url} label="Odkaz ke sdílení" />
+            <CopyField value={link.url} label={t("Share link", "Odkaz ke sdílení")} />
             <p className="text-xs text-muted">
-              {link.expiresAt ? `Platí do ${FormatDate(link.expiresAt)}.` : "Platí, dokud ho nezrušíš."} Zrušit ho můžeš v sekci Sdílené odkazy.
+              {link.expiresAt
+                ? t(`Valid until ${FormatDate(link.expiresAt)}.`, `Platí do ${FormatDate(link.expiresAt)}.`)
+                : t("Valid until you revoke it.", "Platí, dokud ho nezrušíš.")}{" "}
+              {t("You can revoke it in My shares.", "Zrušit ho můžeš v sekci Moje sdílení.")}
             </p>
           </>
         ) : (
           <Select value={expiry} onChange={setExpiry} className="w-full">
-            <Label>Platnost odkazu</Label>
+            <Label>{t("Link expires", "Platnost odkazu")}</Label>
             <Select.Trigger>
               <Select.Value />
               <Select.Indicator />
             </Select.Trigger>
             <Select.Popover>
               <ListBox>
-                {EXPIRY.map(([id, text]) => (
+                {Expiry().map(([id, text]) => (
                   <ListBox.Item key={id} id={id} textValue={text}>
                     {text}
                     <ListBox.ItemIndicator />

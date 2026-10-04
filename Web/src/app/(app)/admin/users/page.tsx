@@ -15,6 +15,7 @@ import { type Person, UserAvatar } from "@/Components/UserAvatar";
 import { ApiFetch, ErrorText } from "@/lib/api";
 import { FormatBytes, FormatDate } from "@/lib/format";
 import { ListPanel } from "@/Components/ListPanel";
+import { t } from "@/lib/i18n";
 
 interface UserRow {
   id: number;
@@ -43,12 +44,12 @@ function RoleSelect({ value, onChange }: { value: Key | null; onChange: (value: 
       </Select.Trigger>
       <Select.Popover>
         <ListBox>
-          <ListBox.Item id="user" textValue="Uživatel">
-            Uživatel — vidí jen svoje soubory
+          <ListBox.Item id="user" textValue={t("User", "Uživatel")}>
+            {t("User: sees only their own files", "Uživatel — vidí jen svoje soubory")}
             <ListBox.ItemIndicator />
           </ListBox.Item>
-          <ListBox.Item id="admin" textValue="Administrátor">
-            Administrátor — vidí vše a spravuje server
+          <ListBox.Item id="admin" textValue={t("Administrator", "Administrátor")}>
+            {t("Administrator: sees everything and manages the server", "Administrátor — vidí vše a spravuje server")}
             <ListBox.ItemIndicator />
           </ListBox.Item>
         </ListBox>
@@ -82,7 +83,7 @@ function UserDialog({ state, onClose, onDone }: { state: DialogState; onClose: (
   async function Submit(event: React.FormEvent) {
     event.preventDefault();
     if (!state) return;
-    if ((state.kind === "create" || state.kind === "password") && password.length < 8) return setError("Heslo musí mít aspoň 8 znaků.");
+    if ((state.kind === "create" || state.kind === "password") && password.length < 8) return setError(t("The password must be at least 8 characters long.", "Heslo musí mít aspoň 8 znaků."));
     setPending(true);
     const result =
       state.kind === "create"
@@ -95,24 +96,26 @@ function UserDialog({ state, onClose, onDone }: { state: DialogState; onClose: (
     setPending(false);
     if (!result.ok) {
       const invalidUsername = result.status === 400 && state.kind === "create";
-      return setError(invalidUsername ? "Jméno smí mít 2–32 znaků: písmena bez diakritiky, číslice, _ . -" : ErrorText(result));
+      return setError(invalidUsername ? t("Usernames are 2–32 characters: letters without accents, digits, _ . -", "Jméno smí mít 2–32 znaků: písmena bez diakritiky, číslice, _ . -") : ErrorText(result));
     }
     onDone(
       state.kind === "create"
-        ? `Uživatel ${username.trim()} založen`
+        ? t(`User ${username.trim()} created`, `Uživatel ${username.trim()} založen`)
         : state.kind === "password"
-          ? `Heslo pro ${target?.username} změněno`
+          ? t(`Password for ${target?.username} changed`, `Heslo pro ${target?.username} změněno`)
           : state.kind === "quota"
-            ? `Kvóta pro ${target?.username} ${quota === null ? "zrušena" : `nastavena na ${FormatBytes(quota)}`}`
-            : `Účet ${target?.username} smazán`,
+            ? quota === null
+              ? t(`Quota for ${target?.username} removed`, `Kvóta pro ${target?.username} zrušena`)
+              : t(`Quota for ${target?.username} set to ${FormatBytes(quota)}`, `Kvóta pro ${target?.username} nastavena na ${FormatBytes(quota)}`)
+            : t(`Account ${target?.username} deleted`, `Účet ${target?.username} smazán`),
     );
   }
 
   const titles = {
-    create: "Nový uživatel",
-    password: `Nové heslo pro ${target?.username}`,
-    delete: `Smazat účet ${target?.username}?`,
-    quota: `Kvóta pro ${target?.username}`,
+    create: t("New user", "Nový uživatel"),
+    password: t(`New password for ${target?.username}`, `Nové heslo pro ${target?.username}`),
+    delete: t(`Delete account ${target?.username}?`, `Smazat účet ${target?.username}?`),
+    quota: t(`Quota for ${target?.username}`, `Kvóta pro ${target?.username}`),
   };
 
   return (
@@ -121,33 +124,39 @@ function UserDialog({ state, onClose, onDone }: { state: DialogState; onClose: (
         {state.kind === "create" && (
           <>
             <TextField value={username} onChange={setUsername} isRequired autoFocus>
-              <Label>Uživatelské jméno</Label>
+              <Label>{t("Username", "Uživatelské jméno")}</Label>
               {/* off: pole nese jméno NĚKOHO JINÉHO, prohlížeč by nabízel adminovo */}
               <Input autoComplete="off" />
             </TextField>
-            <PasswordField label="Heslo" value={password} onChange={setPassword} autoComplete="new-password" description="Aspoň 8 znaků." />
+            <PasswordField label={t("Password", "Heslo")} value={password} onChange={setPassword} autoComplete="new-password" description={t("At least 8 characters.", "Aspoň 8 znaků.")} />
             <RoleSelect value={role} onChange={setRole} />
             <QuotaField bytes={quota} onChange={setQuota} />
           </>
         )}
         {state.kind === "quota" && (
           <>
-            <p className="text-sm text-muted">Teď má obsazeno {FormatBytes(target?.usedBytes ?? 0)}. Nižší limit nic nesmaže, jen zablokuje další nahrávání.</p>
+            <p className="text-sm text-muted">
+              {t(
+                `Currently using ${FormatBytes(target?.usedBytes ?? 0)}. A lower limit deletes nothing, it just blocks further uploads.`,
+                `Teď má obsazeno ${FormatBytes(target?.usedBytes ?? 0)}. Nižší limit nic nesmaže, jen zablokuje další nahrávání.`,
+              )}
+            </p>
             <QuotaField bytes={quota} onChange={setQuota} autoFocus />
           </>
         )}
         {state.kind === "password" && (
-          <PasswordField label="Nové heslo" value={password} onChange={setPassword} autoComplete="new-password" description="Aspoň 8 znaků." autoFocus />
+          <PasswordField label={t("New password", "Nové heslo")} value={password} onChange={setPassword} autoComplete="new-password" description={t("At least 8 characters.", "Aspoň 8 znaků.")} autoFocus />
         )}
         {state.kind === "delete" && (
           <p className="text-sm text-muted">
-            Uživatel se už nepřihlásí a jeho sdílené odkazy přestanou fungovat. <b className="text-foreground">Soubory na disku zůstanou</b> ve složce{" "}
-            <code>{target?.username}</code>, admin je najde ve Všech souborech.
+            {t("The user can no longer sign in and their public links stop working.", "Uživatel se už nepřihlásí a jeho sdílené odkazy přestanou fungovat.")}{" "}
+            <b className="text-foreground">{t("Their files stay on disk", "Soubory na disku zůstanou")}</b> {t("in the folder", "ve složce")} <code>{target?.username}</code>
+            {t(", where admins can find them under All files.", ", admin je najde ve Všech souborech.")}
           </p>
         )}
         {(state.kind === "password" || state.kind === "delete") && (
           <PasswordField
-            label="Tvoje heslo pro potvrzení"
+            label={t("Your password to confirm", "Tvoje heslo pro potvrzení")}
             value={ownPassword}
             onChange={setOwnPassword}
             autoComplete="current-password"
@@ -157,10 +166,10 @@ function UserDialog({ state, onClose, onDone }: { state: DialogState; onClose: (
         {error && <p className="text-sm text-danger">{error}</p>}
         <div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
           <Button variant="tertiary" onPress={onClose} isDisabled={pending}>
-            Zrušit
+            {t("Cancel", "Zrušit")}
           </Button>
           <Button type="submit" variant={state.kind === "delete" ? "danger" : "primary"} isPending={pending}>
-            {{ create: "Založit", password: "Změnit heslo", quota: "Uložit", delete: "Smazat účet" }[state.kind]}
+            {{ create: t("Create", "Založit"), password: t("Change password", "Změnit heslo"), quota: t("Save", "Uložit"), delete: t("Delete account", "Smazat účet") }[state.kind]}
           </Button>
         </div>
       </Form>
@@ -183,7 +192,11 @@ export default function UsersPage() {
   async function ToggleRole(user: UserRow) {
     const role = user.role === "admin" ? "user" : "admin";
     const result = await ApiFetch(`/api/admin/users/${user.id}`, "PATCH", { role });
-    if (result.ok) toast.success(role === "admin" ? `${user.username} je teď administrátor` : `${user.username} už není administrátor`);
+    if (result.ok) toast.success(
+        role === "admin"
+          ? t(`${user.username} is now an administrator`, `${user.username} je teď administrátor`)
+          : t(`${user.username} is no longer an administrator`, `${user.username} už není administrátor`),
+      );
     else toast.danger(ErrorText(result));
     Load();
   }
@@ -192,12 +205,12 @@ export default function UsersPage() {
     <AdminOnly>
       <div className="flex flex-col gap-6">
         <PageHeader
-          title="Uživatelé"
-          description="Každý uživatel má vlastní složku a vidí jen svoje soubory."
+          title={t("Users", "Uživatelé")}
+          description={t("Each user has their own folder and sees only their own files.", "Každý uživatel má vlastní složku a vidí jen svoje soubory.")}
           actions={
             <Button onPress={() => setDialog({ kind: "create" })}>
               <Icon name="person_add" className="text-[18px]" />
-              Přidat uživatele
+              {t("Add user", "Přidat uživatele")}
             </Button>
           }
         />
@@ -215,25 +228,26 @@ export default function UsersPage() {
                     <p className="truncate text-sm font-medium">
                       {user.person.name}
                       {user.person.name !== user.username && <span className="font-normal text-muted"> · {user.username}</span>}
-                      {user.id === me.id && <span className="font-normal text-muted"> (ty)</span>}
+                      {user.id === me.id && <span className="font-normal text-muted"> ({t("you", "ty")})</span>}
                     </p>
                     <p className="text-xs text-muted tabular-nums">
                       {user.quotaBytes === null
-                        ? `${FormatBytes(user.usedBytes)} · bez limitu`
-                        : `${FormatBytes(user.usedBytes)} z ${FormatBytes(user.quotaBytes)}`}
-                      {" · "}založen {FormatDate(user.createdAt)}
+                        ? `${FormatBytes(user.usedBytes)} · ${t("no limit", "bez limitu")}`
+                        : `${FormatBytes(user.usedBytes)} ${t("of", "z")} ${FormatBytes(user.quotaBytes)}`}
+                      {" · "}
+                      {t("created", "založen")} {FormatDate(user.createdAt)}
                     </p>
                   </div>
                   <Chip size="sm" variant="soft" color={user.role === "admin" ? "accent" : "default"}>
-                    {user.role === "admin" ? "Administrátor" : "Uživatel"}
+                    {user.role === "admin" ? t("Administrator", "Administrátor") : t("User", "Uživatel")}
                   </Chip>
                   <MoreButton
-                    label={`Akce pro ${user.username}`}
+                    label={`${t("Actions for", "Akce pro")} ${user.username}`}
                     actions={[
-                      { id: "role", label: user.role === "admin" ? "Odebrat práva admina" : "Udělat administrátorem", icon: "shield_person" },
-                      { id: "password", label: "Nastavit nové heslo", icon: "key" },
-                      { id: "quota", label: "Nastavit kvótu", icon: "data_usage" },
-                      ...(user.id === me.id ? [] : [{ id: "delete", label: "Smazat účet", icon: "person_remove", danger: true, separated: true }]),
+                      { id: "role", label: user.role === "admin" ? t("Remove admin rights", "Odebrat práva admina") : t("Make administrator", "Udělat administrátorem"), icon: "shield_person" },
+                      { id: "password", label: t("Set new password", "Nastavit nové heslo"), icon: "key" },
+                      { id: "quota", label: t("Set quota", "Nastavit kvótu"), icon: "data_usage" },
+                      ...(user.id === me.id ? [] : [{ id: "delete", label: t("Delete account", "Smazat účet"), icon: "person_remove", danger: true, separated: true }]),
                     ]}
                     onAction={(id) => (id === "role" ? ToggleRole(user) : setDialog({ kind: id as "password" | "delete" | "quota", user }))}
                   />

@@ -7,6 +7,7 @@ import { FileIcon } from "../FileIcon";
 import { Icon } from "../Icon";
 import { type Person, PersonLabel, UserAvatar } from "../UserAvatar";
 import { type Action, MoreButton } from "./ActionMenu";
+import { Plural, t } from "@/lib/i18n";
 
 export type SortKey = "name" | "modified" | "size";
 export interface Sort {
@@ -97,7 +98,7 @@ function useItemProps(entry: Entry, handlers: ItemHandlers) {
   const selected = handlers.selected.has(entry.name);
   return {
     role: "option",
-    "aria-label": entry.isDir ? `Složka ${entry.name}` : entry.name,
+    "aria-label": entry.isDir ? `${t("Folder", "Složka")} ${entry.name}` : entry.name,
     "aria-selected": selected,
     "data-name": entry.name,
     tabIndex: -1,
@@ -180,7 +181,7 @@ function SelectBox({ entry, handlers }: { entry: Entry; handlers: ItemHandlers }
       className="flex"
     >
       <Checkbox
-        aria-label={`Označit ${entry.name}`}
+        aria-label={`${t("Select", "Označit")} ${entry.name}`}
         isSelected={handlers.selected.has(entry.name)}
         onChange={() => handlers.onSelect(entry.name, "toggle")}
       >
@@ -197,7 +198,7 @@ function SelectBox({ entry, handlers }: { entry: Entry; handlers: ItemHandlers }
 
 // U složky počet položek uvnitř místo velikosti (velikost = průchod celým stromem).
 const SizeLabel = (entry: Entry) =>
-  entry.isDir ? `${entry.items ?? 0} ${entry.items === 1 ? "položka" : entry.items && entry.items < 5 ? "položky" : "položek"}` : FormatBytes(entry.size);
+  entry.isDir ? `${entry.items ?? 0} ${Plural(entry.items ?? 0, ["item", "items"], ["položka", "položky", "položek"])}` : FormatBytes(entry.size);
 
 function ListRow({ entry, handlers }: { entry: Entry; handlers: ItemHandlers }) {
   const props = useItemProps(entry, handlers);
@@ -230,7 +231,7 @@ function ListRow({ entry, handlers }: { entry: Entry; handlers: ItemHandlers }) 
       {handlers.ownerOf && <PersonLabel person={handlers.ownerOf(entry)} className="hidden text-xs md:flex" />}
       <span className="hidden text-xs text-muted tabular-nums sm:block">{FormatDate(entry.modified)}</span>
       <span className="hidden text-right text-xs text-muted tabular-nums sm:block">{SizeLabel(entry)}</span>
-      <MoreButton label={`Akce pro ${entry.name}`} actions={handlers.actionsFor(entry)} onAction={(id) => handlers.onAction(entry, id)} />
+      <MoreButton label={`${t("Actions for", "Akce pro")} ${entry.name}`} actions={handlers.actionsFor(entry)} onAction={(id) => handlers.onAction(entry, id)} />
     </div>
   );
 }
@@ -266,7 +267,7 @@ function GridTile({ entry, handlers }: { entry: Entry; handlers: ItemHandlers })
       </div>
       <div className="flex items-center gap-1 py-1.5 pr-1 pl-3">
         <NameLabel entry={entry} handlers={handlers} className="flex-1 text-sm" />
-        <MoreButton label={`Akce pro ${entry.name}`} actions={handlers.actionsFor(entry)} onAction={(id) => handlers.onAction(entry, id)} />
+        <MoreButton label={`${t("Actions for", "Akce pro")} ${entry.name}`} actions={handlers.actionsFor(entry)} onAction={(id) => handlers.onAction(entry, id)} />
       </div>
       {!handlers.readOnly && (
         <div className={`absolute top-2 left-2 z-10 rounded-md bg-surface/80 p-0.5 backdrop-blur ${selected ? "" : "opacity-0 group-hover:opacity-100 focus-within:opacity-100"}`}>
@@ -308,7 +309,7 @@ export function FileItems({
     <div>
       <div className={`sticky top-14 z-10 grid ${Columns(handlers)} items-center gap-3 border-b border-separator bg-background px-2 py-2 lg:top-0`}>
         {!handlers.readOnly && (
-          <Checkbox aria-label="Označit vše" isSelected={allSelected} isIndeterminate={!allSelected && handlers.selected.size > 0} onChange={onSelectAll}>
+          <Checkbox aria-label={t("Select all", "Označit vše")} isSelected={allSelected} isIndeterminate={!allSelected && handlers.selected.size > 0} onChange={onSelectAll}>
             <Checkbox.Content>
               <Checkbox.Control>
                 <Checkbox.Indicator />
@@ -316,10 +317,10 @@ export function FileItems({
             </Checkbox.Content>
           </Checkbox>
         )}
-        <SortHeader label="Název" sortKey="name" sort={sort} onSort={onSort} />
-        {handlers.ownerOf && <span className="hidden px-1 text-xs font-medium text-muted md:block">Vlastník</span>}
-        <SortHeader label="Změněno" sortKey="modified" sort={sort} onSort={onSort} className="hidden sm:flex" />
-        <SortHeader label="Velikost" sortKey="size" sort={sort} onSort={onSort} className="hidden justify-self-end sm:flex" />
+        <SortHeader label={t("Name", "Název")} sortKey="name" sort={sort} onSort={onSort} />
+        {handlers.ownerOf && <span className="hidden px-1 text-xs font-medium text-muted md:block">{t("Owner", "Vlastník")}</span>}
+        <SortHeader label={t("Modified", "Změněno")} sortKey="modified" sort={sort} onSort={onSort} className="hidden sm:flex" />
+        <SortHeader label={t("Size", "Velikost")} sortKey="size" sort={sort} onSort={onSort} className="hidden justify-self-end sm:flex" />
         <span className="w-8" />
       </div>
       <div role="listbox" aria-label="Soubory" aria-multiselectable className="flex flex-col gap-0.5 pt-1">

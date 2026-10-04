@@ -6,6 +6,7 @@ import { ApiFetch, ErrorText, Query } from "@/lib/api";
 import { AppDialog } from "../AppDialog";
 import { Icon } from "../Icon";
 import { type Person, UserAvatar } from "../UserAvatar";
+import { t } from "@/lib/i18n";
 
 interface Recipient {
   id: number;
@@ -13,10 +14,12 @@ interface Recipient {
   canWrite: boolean;
 }
 
-const PERMISSIONS = [
-  ["read", "Může zobrazit"],
-  ["write", "Může upravovat"],
-] as const;
+// Funkce, ne konstanta — texty se mají vyhodnotit v aktuálním jazyce.
+const Permissions = () =>
+  [
+    ["read", t("Can view", "Může zobrazit")],
+    ["write", t("Can edit", "Může upravovat")],
+  ] as const;
 
 function PermissionSelect({
   value,
@@ -42,7 +45,7 @@ function PermissionSelect({
       </Select.Trigger>
       <Select.Popover>
         <ListBox>
-          {PERMISSIONS.map(([id, text]) => (
+          {Permissions().map(([id, text]) => (
             <ListBox.Item key={id} id={id} textValue={text}>
               {text}
               <ListBox.ItemIndicator />
@@ -103,7 +106,7 @@ export function UserShareDialog({
     setPending(false);
     if (!result.ok) return toast.danger(ErrorText(result));
     const name = people?.find((person) => person.id === Number(selectedUser))?.name;
-    toast.success(`Sdíleno s ${name}. Přijde mu notifikace.`);
+    toast.success(t(`Shared with ${name}. They'll get a notification.`, `Sdíleno s ${name}. Přijde mu notifikace.`));
     setSelectedUser(null);
     Load();
   }
@@ -116,7 +119,7 @@ export function UserShareDialog({
 
   async function Remove(recipient: Recipient) {
     const result = await ApiFetch(`/api/user-shares/${recipient.id}`, "DELETE");
-    if (result.ok) toast.success(`${recipient.recipient.name} už k „${target?.name}“ nemá přístup`);
+    if (result.ok) toast.success(t(`${recipient.recipient.name} no longer has access to “${target?.name}”`, `${recipient.recipient.name} už k „${target?.name}“ nemá přístup`));
     else toast.danger(ErrorText(result));
     Load();
   }
@@ -128,16 +131,16 @@ export function UserShareDialog({
     <AppDialog
       isOpen={isOpen}
       onOpenChange={onOpenChange}
-      title={`Sdílet „${target?.name ?? ""}“ s uživateli`}
-      footer={<Button onPress={() => onOpenChange(false)}>Hotovo</Button>}
+      title={t(`Share “${target?.name ?? ""}” with users`, `Sdílet „${target?.name ?? ""}“ s uživateli`)}
+      footer={<Button onPress={() => onOpenChange(false)}>{t("Done", "Hotovo")}</Button>}
     >
       <div className="flex flex-col gap-5">
         {people && people.length === 0 ? (
-          <p className="text-sm text-muted">V cloudu zatím nikdo další není. Účty zakládá administrátor.</p>
+          <p className="text-sm text-muted">{t("Nobody else is in the cloud yet. Accounts are created by the administrator.", "V cloudu zatím nikdo další není. Účty zakládá administrátor.")}</p>
         ) : (
           <div className="flex flex-col gap-3">
-            <Select value={selectedUser} onChange={setSelectedUser} placeholder={available.length ? "Vyber uživatele" : "Sdíleno se všemi"} className="w-full" isDisabled={!available.length}>
-              <Label>Komu</Label>
+            <Select value={selectedUser} onChange={setSelectedUser} placeholder={available.length ? t("Choose a user", "Vyber uživatele") : t("Shared with everyone", "Sdíleno se všemi")} className="w-full" isDisabled={!available.length}>
+              <Label>{t("With", "Komu")}</Label>
               <Select.Trigger>
                 <Select.Value />
                 <Select.Indicator />
@@ -159,7 +162,7 @@ export function UserShareDialog({
             </Select>
             <div className="flex items-end gap-2">
               <PermissionSelect
-                label="Oprávnění"
+                label={t("Permission", "Oprávnění")}
                 value={target?.isDir ? permission : "read"}
                 onChange={setPermission}
                 isDisabled={!target?.isDir}
@@ -167,19 +170,19 @@ export function UserShareDialog({
               />
               <Button onPress={Share} isPending={pending} isDisabled={selectedUser === null}>
                 <Icon name="send" className="text-[18px]" />
-                Sdílet
+                {t("Share", "Sdílet")}
               </Button>
             </div>
           </div>
         )}
-        {!target?.isDir && <p className="-mt-2 text-xs text-muted">Soubor jde sdílet jen ke zobrazení a stažení.</p>}
+        {!target?.isDir && <p className="-mt-2 text-xs text-muted">{t("Files can only be shared for viewing and downloading.", "Soubor jde sdílet jen ke zobrazení a stažení.")}</p>}
 
         <div>
-          <p className="mb-2 text-sm font-medium">Kdo má přístup</p>
+          <p className="mb-2 text-sm font-medium">{t("Who has access", "Kdo má přístup")}</p>
           {!recipients ? (
             <Spinner size="sm" />
           ) : recipients.length === 0 ? (
-            <p className="text-sm text-muted">Zatím nesdíleno s nikým.</p>
+            <p className="text-sm text-muted">{t("Not shared with anyone yet.", "Zatím nesdíleno s nikým.")}</p>
           ) : (
             <ul className="flex flex-col divide-y divide-separator rounded-xl border border-border">
               {recipients.map((recipient) => (
@@ -191,14 +194,14 @@ export function UserShareDialog({
                   {target?.isDir ? (
                     <PermissionSelect
                       hideLabel
-                      label={`Oprávnění pro ${recipient.recipient.name}`}
+                      label={t(`Permission for ${recipient.recipient.name}`, `Oprávnění pro ${recipient.recipient.name}`)}
                       value={recipient.canWrite ? "write" : "read"}
                       onChange={(value) => ChangePermission(recipient, value)}
                     />
                   ) : (
-                    <span className="text-xs text-muted">Může zobrazit</span>
+                    <span className="text-xs text-muted">{t("Can view", "Může zobrazit")}</span>
                   )}
-                  <Button isIconOnly size="sm" variant="ghost" aria-label={`Odebrat ${recipient.recipient.name}`} onPress={() => Remove(recipient)} className="text-danger!">
+                  <Button isIconOnly size="sm" variant="ghost" aria-label={t(`Remove ${recipient.recipient.name}`, `Odebrat ${recipient.recipient.name}`)} onPress={() => Remove(recipient)} className="text-danger!">
                     <Icon name="person_remove" className="text-[18px]" />
                   </Button>
                 </li>

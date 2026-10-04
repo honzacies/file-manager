@@ -12,6 +12,7 @@ import { EmptyView, ErrorView, LoadingRows } from "@/Components/StateViews";
 import { ApiFetch, ErrorText, Query } from "@/lib/api";
 import { FormatBytes, FormatDate } from "@/lib/format";
 import { ListPanel } from "@/Components/ListPanel";
+import { t } from "@/lib/i18n";
 
 interface TrashItem {
   id: string;
@@ -57,8 +58,8 @@ export default function TrashPage() {
   return (
     <div className="flex flex-col gap-6">
       <PageHeader
-        title="Koš"
-        description={`Smazané položky se po ${retention} dnech odstraní natrvalo.`}
+        title={t("Trash", "Koš")}
+        description={t(`Deleted items are removed for good after ${retention} days.`, `Smazané položky se po ${retention} dnech odstraní natrvalo.`)}
         actions={
           <>
             {user.role === "admin" && (
@@ -67,14 +68,14 @@ export default function TrashPage() {
                   <Switch.Control>
                     <Switch.Thumb />
                   </Switch.Control>
-                  <span className="text-sm">Koš všech uživatelů</span>
+                  <span className="text-sm">{t("Everyone's trash", "Koš všech uživatelů")}</span>
                 </Switch.Content>
               </Switch>
             )}
             {!!data?.items.length && (
               <Button variant="danger-soft" onPress={() => setConfirm({ kind: "empty" })}>
                 <Icon name="delete_forever" className="text-[18px]" />
-                Vysypat koš
+                {t("Empty trash", "Vysypat koš")}
               </Button>
             )}
           </>
@@ -86,8 +87,8 @@ export default function TrashPage() {
       ) : !data ? (
         <LoadingRows />
       ) : data.items.length === 0 ? (
-        <EmptyView icon="delete" title="Koš je prázdný">
-          Co smažeš, najdeš tady a můžeš to obnovit.
+        <EmptyView icon="delete" title={t("Trash is empty", "Koš je prázdný")}>
+          {t("Whatever you delete ends up here, and you can restore it.", "Co smažeš, najdeš tady a můžeš to obnovit.")}
         </EmptyView>
       ) : (
         <ListPanel>
@@ -99,22 +100,22 @@ export default function TrashPage() {
                     {item.name}
                   </p>
                   <p className="truncate text-xs text-muted" title={item.originalPath}>
-                    Z /{item.originalPath.split("/").slice(0, -1).join("/")} · smazáno {FormatDate(item.deletedAt)}
+                    {t("From", "Z")} /{item.originalPath.split("/").slice(0, -1).join("/")} · {t("deleted", "smazáno")} {FormatDate(item.deletedAt)}
                     {!item.isDir && ` · ${FormatBytes(item.size)}`}
                   </p>
                 </div>
-                <span className="text-xs text-muted tabular-nums">{DaysLeft(item) === 0 ? "dnes zmizí" : `zbývá ${DaysLeft(item)} d`}</span>
+                <span className="text-xs text-muted tabular-nums">{DaysLeft(item) === 0 ? t("gone today", "dnes zmizí") : t(`${DaysLeft(item)} d left`, `zbývá ${DaysLeft(item)} d`)}</span>
                 <div className="flex gap-1">
                   <Button
                     size="sm"
                     variant="secondary"
                     isPending={busy === item.id}
-                    onPress={() => Run("/api/trash/restore", { ids: [item.id] }, `„${item.name}“ obnoveno`, item.id)}
+                    onPress={() => Run("/api/trash/restore", { ids: [item.id] }, t(`“${item.name}” restored`, `„${item.name}“ obnoveno`), item.id)}
                   >
                     <Icon name="restore_from_trash" className="text-[18px]" />
-                    Obnovit
+                    {t("Restore", "Obnovit")}
                   </Button>
-                  <Button size="sm" isIconOnly variant="ghost" aria-label={`Smazat ${item.name} natrvalo`} onPress={() => setConfirm({ kind: "delete", item })} className="text-danger!">
+                  <Button size="sm" isIconOnly variant="ghost" aria-label={t(`Delete ${item.name} forever`, `Smazat ${item.name} natrvalo`)} onPress={() => setConfirm({ kind: "delete", item })} className="text-danger!">
                     <Icon name="delete_forever" className="text-[18px]" />
                   </Button>
                 </div>
@@ -126,16 +127,22 @@ export default function TrashPage() {
       <ConfirmDialog
         isOpen={!!confirm}
         onOpenChange={(open) => !open && setConfirm(null)}
-        heading={confirm?.kind === "empty" ? "Vysypat koš?" : `Smazat „${confirm?.kind === "delete" ? confirm.item.name : ""}“ natrvalo?`}
-        confirmLabel={confirm?.kind === "empty" ? "Vysypat" : "Smazat natrvalo"}
+        heading={
+          confirm?.kind === "empty"
+            ? t("Empty the trash?", "Vysypat koš?")
+            : t(`Delete “${confirm?.kind === "delete" ? confirm.item.name : ""}” forever?`, `Smazat „${confirm?.kind === "delete" ? confirm.item.name : ""}“ natrvalo?`)
+        }
+        confirmLabel={confirm?.kind === "empty" ? t("Empty", "Vysypat") : t("Delete forever", "Smazat natrvalo")}
         isPending={busy === "confirm"}
         onConfirm={() =>
           confirm?.kind === "empty"
-            ? Run("/api/trash/empty", { all }, "Koš je prázdný", "confirm")
-            : confirm && Run("/api/trash/delete", { ids: [confirm.item.id] }, "Smazáno natrvalo", "confirm")
+            ? Run("/api/trash/empty", { all }, t("Trash emptied", "Koš je prázdný"), "confirm")
+            : confirm && Run("/api/trash/delete", { ids: [confirm.item.id] }, t("Deleted forever", "Smazáno natrvalo"), "confirm")
         }
       >
-        {confirm?.kind === "empty" ? `Všech ${data?.items.length ?? 0} položek se smaže z disku. Tohle nejde vrátit.` : "Soubor se smaže z disku. Tohle nejde vrátit."}
+        {confirm?.kind === "empty"
+          ? t(`All ${data?.items.length ?? 0} items will be deleted from disk. This can't be undone.`, `Všech ${data?.items.length ?? 0} položek se smaže z disku. Tohle nejde vrátit.`)
+          : t("The file will be deleted from disk. This can't be undone.", "Soubor se smaže z disku. Tohle nejde vrátit.")}
       </ConfirmDialog>
     </div>
   );

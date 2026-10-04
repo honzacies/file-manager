@@ -1,3 +1,5 @@
+import { t } from "@/lib/i18n";
+
 // Soubory "Zpřístupnit offline" leží v Cache Storage prohlížeče. Service worker (public/sw.js)
 // je odtud vrátí, když server není dostupný. Stejný název cache a stejný klíč jako v sw.js!
 export const OFFLINE_CACHE = "cloud-offline-v1";
@@ -28,7 +30,7 @@ export async function SaveOffline(url: string, name: string) {
   const inline = new URL(url, window.location.origin);
   inline.searchParams.set("inline", "true");
   const response = await fetch(inline);
-  if (!response.ok) throw new Error("Soubor se nepodařilo stáhnout.");
+  if (!response.ok) throw new Error(t("Couldn't download the file.", "Soubor se nepodařilo stáhnout."));
   const blob = await response.blob();
   const headers = new Headers({
     "Content-Type": response.headers.get("Content-Type") ?? "application/octet-stream",
@@ -56,7 +58,7 @@ export async function ListOffline(): Promise<OfflineFile[]> {
       const url = new URL(request.url);
       return {
         key: url.pathname + url.search,
-        name: decodeURIComponent(response?.headers.get("X-Cloud-Name") ?? "soubor"),
+        name: decodeURIComponent(response?.headers.get("X-Cloud-Name") ?? t("file", "soubor")),
         size: Number(response?.headers.get("Content-Length") ?? 0),
         savedAt: Number(response?.headers.get("X-Cloud-Saved") ?? 0),
       };

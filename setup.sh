@@ -34,48 +34,48 @@ Confirm() {
 
 printf '%s' "$C_ACCENT$C_BOLD"
 cat <<'EOF'
-   ☁  Cloud — domácí úložiště
+   ☁  Cloud: self-hosted file storage
 EOF
 printf '%s\n' "$C_RESET"
 
-[[ $EUID -eq 0 ]] || Fail "Spusť jako root: sudo ./setup.sh"
-[[ -f docker-compose.yml ]] || Fail "Chybí docker-compose.yml — spouštěj setup.sh ze složky projektu."
+[[ $EUID -eq 0 ]] || Fail "Run as root: sudo ./setup.sh"
+[[ -f docker-compose.yml ]] || Fail "docker-compose.yml is missing. Run setup.sh from the project folder."
 
 # ---- 1. Docker --------------------------------------------------------------
 Step "Docker"
 if command -v docker >/dev/null && docker compose version >/dev/null 2>&1; then
-  Ok "Docker je nainstalovaný ($(docker --version | cut -d' ' -f3 | tr -d ,))"
+  Ok "Docker is installed ($(docker --version | cut -d' ' -f3 | tr -d ,))"
 else
-  Log "Instaluji Docker z repozitářů Ubuntu…"
+  Log "Installing Docker from the Ubuntu repositories…"
   apt-get update -qq
   apt-get install -y -qq docker.io docker-compose-v2 >/dev/null
   systemctl enable --now docker >/dev/null
-  Ok "Docker nainstalován"
+  Ok "Docker installed"
 fi
 
 # ---- 2. Konfigurace ---------------------------------------------------------
-Step "Nastavení"
+Step "Settings"
 # Předchozí hodnoty z .env slouží jako výchozí — opakované spuštění nic nepřepíše omylem.
 if [[ -f .env ]]; then
   set -a
   . ./.env
   set +a
-  Log "Načteno stávající nastavení z .env"
+  Log "Loaded existing settings from .env"
 fi
 
 OWNER_DEFAULT="${SUDO_USER:-}"
 if [[ -n "${PUID:-}" ]]; then OWNER_DEFAULT="$(getent passwd "$PUID" | cut -d: -f1 || true)"; fi
 [[ -n "$OWNER_DEFAULT" && "$OWNER_DEFAULT" != root ]] || OWNER_DEFAULT="cloud"
 
-CLOUD_DIR="$(Ask "Složka na disku, kam se budou ukládat soubory" "${CLOUD_DIR:-/srv/cloud}")"
-[[ "$CLOUD_DIR" == /* ]] || Fail "Cesta musí být absolutní (začínat /)."
-PORT="$(Ask "Port webu" "${PORT:-8080}")"
-[[ "$PORT" =~ ^[0-9]+$ ]] && (( PORT >= 1024 && PORT <= 65535 )) || Fail "Port musí být číslo 1024–65535."
-BIND_ADDRESS="$(Ask "Adresa, na které web poslouchá (0.0.0.0 = LAN i Tailscale)" "${BIND_ADDRESS:-0.0.0.0}")"
-OWNER="$(Ask "Linuxový uživatel, kterému budou soubory patřit" "$OWNER_DEFAULT")"
+CLOUD_DIR="$(Ask "Folder on disk where files will be stored" "${CLOUD_DIR:-/srv/cloud}")"
+[[ "$CLOUD_DIR" == /* ]] || Fail "The path must be absolute (start with /)."
+PORT="$(Ask "Web port" "${PORT:-8080}")"
+[[ "$PORT" =~ ^[0-9]+$ ]] && (( PORT >= 1024 && PORT <= 65535 )) || Fail "The port must be a number from 1024 to 65535."
+BIND_ADDRESS="$(Ask "Address to listen on (0.0.0.0 = LAN and Tailscale)" "${BIND_ADDRESS:-0.0.0.0}")"
+OWNER="$(Ask "Linux user who will own the files" "$OWNER_DEFAULT")"
 
 if ! id "$OWNER" >/dev/null 2>&1; then
-  Log "Zakládám systémového uživatele $OWNER…"
+  Log "Creating system user $OWNER…"
   useradd --system --no-create-home --shell /usr/sbin/nologin "$OWNER"
 fi
 PUID="$(id -u "$OWNER")"
@@ -92,61 +92,61 @@ PUID=$PUID
 PGID=$PGID
 EOF
 chmod 600 .env
-Ok "Uloženo do .env (soubory: $CLOUD_DIR, vlastník: $OWNER $PUID:$PGID)"
+Ok "Saved to .env (files: $CLOUD_DIR, owner: $OWNER $PUID:$PGID)"
 
 # Port obsazený něčím jiným než tímhle kontejnerem
 if ss -tlnH "sport = :$PORT" 2>/dev/null | grep -q . && ! docker compose ps --format '{{.Ports}}' 2>/dev/null | grep -q ":$PORT->"; then
-  Warn "Port $PORT už používá jiný program — kontejner se nemusí spustit."
+  Warn "Port $PORT is already used by another program. The container may fail to start."
 fi
 
 # ---- 3. Build a start -------------------------------------------------------
-Step "Sestavení a spuštění"
-Log "Stavím image (poprvé to trvá pár minut)…"
+Step "Build and start"
+Log "Building the image (the first time takes a few minutes)…"
 docker compose up -d --build --remove-orphans
-Log "Čekám, až cloud naběhne…"
+Log "Waiting for the cloud to start…"
 for _ in $(seq 1 60); do
   # 401 z /api/auth/me = API běží, jen nejsme přihlášení
   code="$(curl -s -o /dev/null -w '%{http_code}' "http://127.0.0.1:$PORT/api/auth/me" || true)"
   [[ "$code" == 401 ]] && break
   sleep 1
 done
-[[ "${code:-}" == 401 ]] || Fail "Cloud nenaběhl. Log: docker compose logs cloud"
-Ok "Cloud běží"
+[[ "${code:-}" == 401 ]] || Fail "The cloud didn't start. Logs: docker compose logs cloud"
+Ok "Cloud is running"
 
 # ---- 4. Admin ---------------------------------------------------------------
-Step "Administrátor"
+Step "Administrator"
 HAS_USERS=0
 if [[ -f data/cloud.db ]] && docker compose exec -T cloud node --disable-warning=ExperimentalWarning -e \
   "const {DatabaseSync}=require('node:sqlite');process.exit(new DatabaseSync('/data/cloud.db').prepare('SELECT COUNT(*) n FROM users').get().n?0:1)" 2>/dev/null; then
   HAS_USERS=1
 fi
 
-if (( HAS_USERS == 0 )) || Confirm "Založit dalšího admina nebo obnovit heslo existujícímu?" "n"; then
-  ADMIN="$(Ask "Uživatelské jméno admina" "admin")"
+if (( HAS_USERS == 0 )) || Confirm "Create another admin or reset an existing password?" "n"; then
+  ADMIN="$(Ask "Admin username" "admin")"
   while true; do
-    read -r -s -p "$(printf '%s?%s Heslo (aspoň 8 znaků): ' "$C_ACCENT" "$C_RESET")" PASSWORD; echo
-    read -r -s -p "$(printf '%s?%s Heslo znovu: ' "$C_ACCENT" "$C_RESET")" PASSWORD2; echo
-    [[ "$PASSWORD" == "$PASSWORD2" ]] || { Warn "Hesla se neshodují."; continue; }
-    (( ${#PASSWORD} >= 8 )) || { Warn "Heslo je moc krátké."; continue; }
+    read -r -s -p "$(printf '%s?%s Password (at least 8 characters): ' "$C_ACCENT" "$C_RESET")" PASSWORD; echo
+    read -r -s -p "$(printf '%s?%s Repeat password: ' "$C_ACCENT" "$C_RESET")" PASSWORD2; echo
+    [[ "$PASSWORD" == "$PASSWORD2" ]] || { Warn "The passwords don't match."; continue; }
+    (( ${#PASSWORD} >= 8 )) || { Warn "The password is too short."; continue; }
     break
   done
   # Heslo jde přes stdin, ne jako argument — v `ps` by ho viděl každý.
   printf '%s\n' "$PASSWORD" | docker compose exec -T cloud node --disable-warning=ExperimentalWarning src/Scripts/CreateAdmin.ts "$ADMIN"
   unset PASSWORD PASSWORD2
 else
-  Ok "Uživatelé už existují, přeskakuji"
+  Ok "Users already exist, skipping"
 fi
 
 # ---- 5. Hotovo --------------------------------------------------------------
-Step "Hotovo"
+Step "Done"
 LAN_IP="$(hostname -I 2>/dev/null | awk '{print $1}')"
 [[ "$BIND_ADDRESS" == 0.0.0.0 ]] || LAN_IP="$BIND_ADDRESS"
-printf '  %sV síti:%s      http://%s:%s\n' "$C_BOLD" "$C_RESET" "${LAN_IP:-IP-serveru}" "$PORT"
+printf '  %sNetwork:%s     http://%s:%s\n' "$C_BOLD" "$C_RESET" "${LAN_IP:-server-ip}" "$PORT"
 if command -v tailscale >/dev/null && TS_IP="$(tailscale ip -4 2>/dev/null | head -1)" && [[ -n "$TS_IP" && "$BIND_ADDRESS" == 0.0.0.0 ]]; then
   printf '  %sTailscale:%s   http://%s:%s\n' "$C_BOLD" "$C_RESET" "$TS_IP" "$PORT"
 else
-  printf '  %sTailscale zatím není nainstalovaný — přístup zvenku: https://tailscale.com/download/linux%s\n' "$C_MUTED" "$C_RESET"
+  printf '  %sTailscale is not installed yet. For access from outside: https://tailscale.com/download/linux%s\n' "$C_MUTED" "$C_RESET"
 fi
-printf '\n  %sSoubory:%s     %s\n' "$C_BOLD" "$C_RESET" "$CLOUD_DIR"
-printf '  %sLogy:%s        docker compose logs -f cloud\n' "$C_BOLD" "$C_RESET"
-printf '  %sAktualizace:%s git pull && sudo ./setup.sh\n\n' "$C_BOLD" "$C_RESET"
+printf '\n  %sFiles:%s       %s\n' "$C_BOLD" "$C_RESET" "$CLOUD_DIR"
+printf '  %sLogs:%s        docker compose logs -f cloud\n' "$C_BOLD" "$C_RESET"
+printf '  %sUpdate:%s      git pull && sudo ./setup.sh\n\n' "$C_BOLD" "$C_RESET"

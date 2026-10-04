@@ -1,3 +1,5 @@
+import { Locale } from "./i18n";
+
 export interface Entry {
   name: string;
   isDir: boolean;
@@ -28,20 +30,16 @@ export function FormatBytes(bytes: number) {
     value /= 1024;
     unit++;
   }
-  return `${value.toLocaleString("cs-CZ", { maximumFractionDigits: value < 10 ? 1 : 0 })} ${units[unit]}`;
+  return `${value.toLocaleString(Locale(), { maximumFractionDigits: value < 10 ? 1 : 0 })} ${units[unit]}`;
 }
 
-const dateFormat = new Intl.DateTimeFormat("cs-CZ", { day: "numeric", month: "numeric", year: "numeric", hour: "2-digit", minute: "2-digit" });
-
 export function FormatDate(ms: number) {
-  return dateFormat.format(ms);
+  return new Date(ms).toLocaleString(Locale(), { day: "numeric", month: "numeric", year: "numeric", hour: "2-digit", minute: "2-digit" });
 }
 
 // Bez času — na mobilu se celé datum s časem do řádku pod názvem nevejde.
-const shortDateFormat = new Intl.DateTimeFormat("cs-CZ", { day: "numeric", month: "numeric", year: "numeric" });
-
 export function FormatDateShort(ms: number) {
-  return shortDateFormat.format(ms);
+  return new Date(ms).toLocaleDateString(Locale(), { day: "numeric", month: "numeric", year: "numeric" });
 }
 
 export type FileKind = "folder" | "image" | "video" | "audio" | "pdf" | "text" | "archive" | "other";

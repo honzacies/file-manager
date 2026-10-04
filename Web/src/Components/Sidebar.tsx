@@ -8,12 +8,14 @@ import { ApiFetch } from "@/lib/api";
 import { FormatBytes } from "@/lib/format";
 import { Brand } from "./Brand";
 import { Icon } from "./Icon";
+import { LanguageSwitch } from "./Language";
 import { NotificationBell } from "./Notifications";
 import { ForgetUser, useUser } from "./Session";
 import { ClearOffline } from "@/lib/offline";
 import { ThemeToggle } from "./ThemeToggle";
 import { useUploads } from "./Uploads";
 import { UserAvatar } from "./UserAvatar";
+import { t } from "@/lib/i18n";
 
 interface NavItem {
   href: string;
@@ -71,12 +73,14 @@ function StorageMeter() {
   const ratio = used / (max || 1);
   return (
     <Meter value={Math.min(used, max)} maxValue={max || 1} size="sm" color={ratio > 0.95 ? "danger" : ratio > 0.85 ? "warning" : "accent"} className="px-3">
-      <Label className="text-xs text-muted">{hasQuota ? "Tvoje místo" : "Místo na disku"}</Label>
+      <Label className="text-xs text-muted">{hasQuota ? t("Your storage", "Tvoje místo") : t("Disk space", "Místo na disku")}</Label>
       <Meter.Track>
         <Meter.Fill />
       </Meter.Track>
       <span className="col-span-2 text-xs text-muted tabular-nums">
-        {hasQuota ? `Obsazeno ${FormatBytes(used)} z ${FormatBytes(max)}` : `Volných ${FormatBytes(storage.free)} z ${FormatBytes(storage.total)}`}
+        {hasQuota
+          ? t(`${FormatBytes(used)} of ${FormatBytes(max)} used`, `Obsazeno ${FormatBytes(used)} z ${FormatBytes(max)}`)
+          : t(`${FormatBytes(storage.free)} free of ${FormatBytes(storage.total)}`, `Volných ${FormatBytes(storage.free)} z ${FormatBytes(storage.total)}`)}
       </span>
     </Meter>
   );
@@ -95,18 +99,18 @@ function SidebarBody({ onNavigate }: { onNavigate?: () => void }) {
   }
 
   const main: NavItem[] = [
-    { href: "/files/", label: "Moje soubory", icon: "folder" },
-    { href: "/recent/", label: "Nedávné", icon: "schedule" },
-    { href: "/starred/", label: "S hvězdičkou", icon: "star" },
-    ...(user.role === "admin" ? [{ href: "/files/", label: "Všechny soubory", icon: "folder_supervised", all: true }] : []),
-    { href: "/shared/", label: "Sdíleno se mnou", icon: "folder_shared" },
-    { href: "/shares/", label: "Moje sdílení", icon: "share" },
+    { href: "/files/", label: t("My files", "Moje soubory"), icon: "folder" },
+    { href: "/recent/", label: t("Recent", "Nedávné"), icon: "schedule" },
+    { href: "/starred/", label: t("Starred", "S hvězdičkou"), icon: "star" },
+    ...(user.role === "admin" ? [{ href: "/files/", label: t("All files", "Všechny soubory"), icon: "folder_supervised", all: true }] : []),
+    { href: "/shared/", label: t("Shared with me", "Sdíleno se mnou"), icon: "folder_shared" },
+    { href: "/shares/", label: t("My shares", "Moje sdílení"), icon: "share" },
     { href: "/offline/", label: "Offline", icon: "offline_pin" },
-    { href: "/trash/", label: "Koš", icon: "delete" },
+    { href: "/trash/", label: t("Trash", "Koš"), icon: "delete" },
   ];
   const admin: NavItem[] = [
-    { href: "/admin/users/", label: "Uživatelé", icon: "group" },
-    { href: "/admin/settings/", label: "Nastavení", icon: "settings" },
+    { href: "/admin/users/", label: t("Users", "Uživatelé"), icon: "group" },
+    { href: "/admin/settings/", label: t("Settings", "Nastavení"), icon: "settings" },
   ];
 
   return (
@@ -116,13 +120,13 @@ function SidebarBody({ onNavigate }: { onNavigate?: () => void }) {
         {/* V Draweru (mobil) je zvoneček v horní liště, tady by byl dvakrát. */}
         {!onNavigate && <NotificationBell />}
       </div>
-      <nav aria-label="Hlavní menu" className="flex flex-col gap-0.5">
+      <nav aria-label={t("Main menu", "Hlavní menu")} className="flex flex-col gap-0.5">
         {main.map((item) => (
           <NavLink key={item.label} item={item} onNavigate={onNavigate} />
         ))}
         {user.role === "admin" && (
           <>
-            <p className="mt-4 mb-1 px-3 text-xs font-medium uppercase tracking-wide text-muted">Administrace</p>
+            <p className="mt-4 mb-1 px-3 text-xs font-medium uppercase tracking-wide text-muted">{t("Administration", "Administrace")}</p>
             {admin.map((item) => (
               <NavLink key={item.label} item={item} onNavigate={onNavigate} />
             ))}
@@ -133,7 +137,10 @@ function SidebarBody({ onNavigate }: { onNavigate?: () => void }) {
       <div className="mt-auto flex flex-col gap-3">
         <StorageMeter />
         <Separator />
-        <ThemeToggle />
+        <div className="flex items-center justify-between gap-2 pr-3">
+          <ThemeToggle />
+          <LanguageSwitch />
+        </div>
         <div className="flex items-center gap-1">
           <Link
             href="/account/"
@@ -143,10 +150,10 @@ function SidebarBody({ onNavigate }: { onNavigate?: () => void }) {
             <UserAvatar person={user} />
             <span className="min-w-0">
               <span className="block truncate text-sm font-medium">{user.name}</span>
-              <span className="block text-xs text-muted">{user.role === "admin" ? "Administrátor" : "Uživatel"}</span>
+              <span className="block text-xs text-muted">{user.role === "admin" ? t("Administrator", "Administrátor") : t("User", "Uživatel")}</span>
             </span>
           </Link>
-          <Button isIconOnly variant="tertiary" aria-label="Odhlásit se" onPress={Logout}>
+          <Button isIconOnly variant="tertiary" aria-label={t("Sign out", "Odhlásit se")} onPress={Logout}>
             <Icon name="logout" className="text-[20px]" />
           </Button>
         </div>
@@ -166,7 +173,7 @@ export function Sidebar() {
 
       {/* Užší než lg: horní lišta + menu v Draweru. */}
       <header className="sticky top-0 z-30 flex h-14 items-center gap-2 border-b border-separator bg-surface-tertiary px-3 lg:hidden">
-        <Button isIconOnly variant="tertiary" aria-label="Otevřít menu" onPress={() => setOpen(true)}>
+        <Button isIconOnly variant="tertiary" aria-label={t("Open menu", "Otevřít menu")} onPress={() => setOpen(true)}>
           <Icon name="menu" className="text-[22px]" />
         </Button>
         <Brand />

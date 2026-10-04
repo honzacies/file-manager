@@ -369,6 +369,14 @@ try {
     assert.equal(details.owner.username, "alice");
   });
 
+  await Check("jazyk: hlášky a notifikace anglicky, s X-Lang: cs česky", async () => {
+    const url = "/api/files/details?path=neexistuje";
+    assert.equal((await app.inject({ url, headers: alice })).json().error, "File or folder not found.");
+    assert.equal((await app.inject({ url, headers: { ...alice, "x-lang": "cs" } })).json().error, "Soubor nebo složka neexistuje.");
+    assert.match((await app.inject({ url: "/api/notifications", headers: bob2 })).json().items[0].text, /shared the/);
+    assert.match((await app.inject({ url: "/api/notifications", headers: { ...bob2, "x-lang": "cs" } })).json().items[0].text, /s tebou sdílí/);
+  });
+
   await Check("sdílení jen pro čtení: kopie a barva zakázané, hvězdička povolená", async () => {
     const file = (await app.inject({ url: "/api/user-shares/incoming", headers: bob2 })).json().find((s: { name: string }) => s.name === "novy.txt");
     assert.equal((await app.inject({ method: "POST", url: "/api/files/copy", headers: bob2, payload: { paths: [""], share: file.id } })).statusCode, 403);

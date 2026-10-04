@@ -1,6 +1,7 @@
 "use client";
 
 import { Description, Label, NumberField } from "@heroui/react";
+import { t } from "@/lib/i18n";
 
 const GB = 1024 ** 3;
 
@@ -15,13 +16,13 @@ export function QuotaField({ bytes, onChange, autoFocus }: { bytes: number | nul
       formatOptions={{ maximumFractionDigits: 1 }}
       autoFocus={autoFocus}
     >
-      <Label>Kvóta (GB)</Label>
+      <Label>{t("Quota (GB)", "Kvóta (GB)")}</Label>
       <NumberField.Group>
         <NumberField.DecrementButton />
-        <NumberField.Input placeholder="Bez limitu" />
+        <NumberField.Input placeholder={t("No limit", "Bez limitu")} />
         <NumberField.IncrementButton />
       </NumberField.Group>
-      <Description>Prázdné = bez limitu. Koš se do kvóty nepočítá.</Description>
+      <Description>{t("Empty = no limit. Trash doesn't count toward the quota.", "Prázdné = bez limitu. Koš se do kvóty nepočítá.")}</Description>
     </NumberField>
   );
 }

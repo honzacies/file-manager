@@ -3,6 +3,7 @@ import { CreateSession, DeleteOtherSessions, DeleteSession, HashPassword, Requir
 import { Db } from "../Db.ts";
 import { PersonById } from "../People.ts";
 import { HttpError } from "../Storage.ts";
+import { T } from "../Lang.ts";
 
 export async function AuthRoutes(app: FastifyInstance) {
   app.post(
@@ -24,7 +25,7 @@ export async function AuthRoutes(app: FastifyInstance) {
         | undefined;
       // Stejná hláška i doba pro neexistující jméno a špatné heslo.
       if (!(await VerifyPassword(user?.password_hash, password)) || !user) {
-        throw new HttpError(401, "Špatné jméno nebo heslo.");
+        throw new HttpError(401, T("Wrong username or password.", "Špatné jméno nebo heslo."));
       }
       const session = CreateSession(user.id);
       reply.setCookie(SESSION_COOKIE, session.token, {
@@ -64,7 +65,7 @@ export async function AuthRoutes(app: FastifyInstance) {
       },
       async (request) => {
         const { currentPassword, newPassword } = request.body as { currentPassword: string; newPassword: string };
-        await RequireOwnPassword(request.user.id, currentPassword, "Současné heslo nesedí.");
+        await RequireOwnPassword(request.user.id, currentPassword, T("Your current password is incorrect.", "Současné heslo nesedí."));
         Db.prepare("UPDATE users SET password_hash = ? WHERE id = ?").run(await HashPassword(newPassword), request.user.id);
         // Ostatní zařízení odhlásit, aktuální relace zůstává.
         DeleteOtherSessions(request.user.id, request.cookies[SESSION_COOKIE] ?? "");

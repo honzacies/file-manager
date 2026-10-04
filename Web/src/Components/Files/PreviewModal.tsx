@@ -5,6 +5,7 @@ import { useEffect, useState } from "react";
 import { type Entry, FormatBytes, KindOf } from "@/lib/format";
 import { FileIcon } from "../FileIcon";
 import { Icon } from "../Icon";
+import { t } from "@/lib/i18n";
 
 const TEXT_LIMIT = 2 * 1024 * 1024;
 
@@ -16,10 +17,10 @@ function TextPreview({ url, size }: { url: string; size: number }) {
     fetch(url)
       .then((response) => response.text())
       .then(setText)
-      .catch(() => setText("Soubor se nepodařilo načíst."));
+      .catch(() => setText(t("Couldn't load the file.", "Soubor se nepodařilo načíst.")));
   }, [url, size]);
 
-  if (size > TEXT_LIMIT) return <p className="m-auto text-sm text-muted">Soubor je na náhled moc velký ({FormatBytes(size)}). Stáhni si ho.</p>;
+  if (size > TEXT_LIMIT) return <p className="m-auto text-sm text-muted">{t(`The file is too large to preview (${FormatBytes(size)}). Download it instead.`, `Soubor je na náhled moc velký (${FormatBytes(size)}). Stáhni si ho.`)}</p>;
   if (text === null) return <Spinner className="m-auto" />;
   return <pre className="h-full w-full overflow-auto rounded-xl bg-surface p-4 font-mono text-xs leading-relaxed whitespace-pre-wrap text-surface-foreground">{text}</pre>;
 }
@@ -64,7 +65,7 @@ export function PreviewModal({
             <div className="min-w-0 flex-1">
               <Modal.Heading className="truncate text-base font-medium text-white">{entry.name}</Modal.Heading>
               <p className="text-xs text-white/60 tabular-nums">
-                {FormatBytes(entry.size)} · {index + 1} z {entries.length}
+                {FormatBytes(entry.size)} · {index + 1} {t("of", "z")} {entries.length}
               </p>
             </div>
             <a
@@ -73,9 +74,9 @@ export function PreviewModal({
               className="inline-flex h-9 items-center gap-2 rounded-full bg-white/10 px-4 text-sm font-medium text-white outline-none hover:bg-white/20 focus-visible:ring-2 focus-visible:ring-white"
             >
               <Icon name="download" className="text-[18px]" />
-              <span className="hidden sm:inline">Stáhnout</span>
+              <span className="hidden sm:inline">{t("Download", "Stáhnout")}</span>
             </a>
-            <Button isIconOnly variant="ghost" aria-label="Zavřít náhled" onPress={onClose} className="text-white! hover:bg-white/10!">
+            <Button isIconOnly variant="ghost" aria-label={t("Close preview", "Zavřít náhled")} onPress={onClose} className="text-white! hover:bg-white/10!">
               <Icon name="close" className="text-[22px]" />
             </Button>
           </header>
@@ -103,7 +104,7 @@ export function PreviewModal({
             {index > 0 && (
               <Button
                 isIconOnly
-                aria-label="Předchozí soubor"
+                aria-label={t("Previous file", "Předchozí soubor")}
                 onPress={() => onIndexChange(index - 1)}
                 className="absolute top-1/2 left-2 -translate-y-1/2 rounded-full! bg-white/10! text-white! hover:bg-white/20! sm:left-4"
               >
@@ -113,7 +114,7 @@ export function PreviewModal({
             {index < entries.length - 1 && (
               <Button
                 isIconOnly
-                aria-label="Další soubor"
+                aria-label={t("Next file", "Další soubor")}
                 onPress={() => onIndexChange(index + 1)}
                 className="absolute top-1/2 right-2 -translate-y-1/2 rounded-full! bg-white/10! text-white! hover:bg-white/20! sm:right-4"
               >

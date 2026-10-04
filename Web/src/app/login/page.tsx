@@ -4,9 +4,11 @@ import { Button, FieldError, Form, Input, Label, TextField } from "@heroui/react
 import { useRouter, useSearchParams } from "next/navigation";
 import { Suspense, useState } from "react";
 import { Brand } from "@/Components/Brand";
+import { LanguageSwitch } from "@/Components/Language";
 import { Panel } from "@/Components/Panel";
 import { ApiFetch, ErrorText } from "@/lib/api";
 import { SafeRedirect } from "@/lib/safeRedirect";
+import { t } from "@/lib/i18n";
 
 function LoginForm() {
   const router = useRouter();
@@ -22,7 +24,7 @@ function LoginForm() {
     setError(null);
     const result = await ApiFetch("/api/auth/login", "POST", { username, password });
     if (!result.ok) {
-      setError(result.status === 429 ? "Moc pokusů. Zkus to za minutu." : ErrorText(result));
+      setError(result.status === 429 ? t("Too many attempts. Try again in a minute.", "Moc pokusů. Zkus to za minutu.") : ErrorText(result));
       setPending(false);
       return;
     }
@@ -32,16 +34,16 @@ function LoginForm() {
   return (
     <Form onSubmit={Submit} className="flex flex-col gap-5">
       <TextField name="username" value={username} onChange={setUsername} isRequired autoFocus>
-        <Label>Uživatelské jméno</Label>
+        <Label>{t("Username", "Uživatelské jméno")}</Label>
         <Input autoComplete="username" />
       </TextField>
       <TextField name="password" type="password" value={password} onChange={setPassword} isRequired isInvalid={!!error}>
-        <Label>Heslo</Label>
+        <Label>{t("Password", "Heslo")}</Label>
         <Input autoComplete="current-password" />
         {error && <FieldError>{error}</FieldError>}
       </TextField>
       <Button type="submit" isPending={pending} fullWidth>
-        Přihlásit se
+        {t("Sign in", "Přihlásit se")}
       </Button>
     </Form>
   );
@@ -53,12 +55,15 @@ export default function LoginPage() {
       <Panel className="w-full max-w-sm p-8!">
         <div className="mb-6 flex flex-col gap-2">
           <Brand large />
-          <p className="text-sm text-muted">Přihlas se ke svým souborům.</p>
+          <p className="text-sm text-muted">{t("Sign in to your files.", "Přihlas se ke svým souborům.")}</p>
         </div>
         <Suspense>
           <LoginForm />
         </Suspense>
-        <p className="mt-6 text-xs text-muted">Účet ti založí administrátor.</p>
+        <div className="mt-6 flex items-center justify-between gap-3">
+          <p className="text-xs text-muted">{t("Your administrator creates your account.", "Účet ti založí administrátor.")}</p>
+          <LanguageSwitch />
+        </div>
       </Panel>
     </div>
   );

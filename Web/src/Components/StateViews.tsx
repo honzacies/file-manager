@@ -1,6 +1,7 @@
 import { Button, EmptyState, Skeleton } from "@heroui/react";
 import type { ReactNode } from "react";
 import { Icon } from "./Icon";
+import { t } from "@/lib/i18n";
 
 // Společné stavy seznamů: načítání, chyba, prázdno.
 export function LoadingRows({ count = 5 }: { count?: number }) {
@@ -17,10 +18,10 @@ export function ErrorView({ message, onRetry }: { message: string; onRetry: () =
   return (
     <EmptyState className="flex flex-col items-center gap-2 py-16 text-center">
       <Icon name="error" className="text-[48px] text-danger" />
-      <p className="font-medium">Nepodařilo se načíst data</p>
+      <p className="font-medium">{t("Couldn't load data", "Nepodařilo se načíst data")}</p>
       <p className="text-sm text-muted">{message}</p>
       <Button className="mt-2" onPress={onRetry}>
-        Zkusit znovu
+        {t("Try again", "Zkusit znovu")}
       </Button>
     </EmptyState>
   );

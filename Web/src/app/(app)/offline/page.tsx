@@ -10,6 +10,7 @@ import { EmptyView, LoadingRows } from "@/Components/StateViews";
 import { CanPreview, type Entry, FormatBytes, FormatDate } from "@/lib/format";
 import { ListOffline, type OfflineFile, OfflineSupported, RemoveOffline } from "@/lib/offline";
 import { ClickableRow, ListPanel } from "@/Components/ListPanel";
+import { t } from "@/lib/i18n";
 
 // navigator.onLine jako React stav (bez setState v efektu)
 function useOnline() {
@@ -53,7 +54,7 @@ export default function OfflinePage() {
 
   async function Remove(entry: OfflineEntry) {
     await RemoveOffline(entry.key);
-    toast.success(`„${entry.name}“ už není dostupné offline`);
+    toast.success(t(`“${entry.name}” is no longer available offline`, `„${entry.name}“ už není dostupné offline`));
     Load();
   }
 
@@ -76,29 +77,33 @@ export default function OfflinePage() {
     <div className="flex flex-col gap-6">
       <PageHeader
         title="Offline"
-        description={entries.length ? `Soubory uložené v tomhle prohlížeči · ${FormatBytes(total)}` : "Soubory uložené v tomhle prohlížeči pro chvíle bez připojení."}
+        description={
+          entries.length
+            ? `${t("Files saved in this browser", "Soubory uložené v tomhle prohlížeči")} · ${FormatBytes(total)}`
+            : t("Files saved in this browser for when you're offline.", "Soubory uložené v tomhle prohlížeči pro chvíle bez připojení.")
+        }
       />
 
       {!online && (
         <Alert status="warning">
           <Alert.Indicator />
           <Alert.Content>
-            <Alert.Title>Jsi offline</Alert.Title>
-            <Alert.Description>Fungují jen soubory uložené níž. Zbytek cloudu se vrátí, až bude připojení.</Alert.Description>
+            <Alert.Title>{t("You're offline", "Jsi offline")}</Alert.Title>
+            <Alert.Description>{t("Only the files saved below work. The rest of the cloud comes back when you're online.", "Fungují jen soubory uložené níž. Zbytek cloudu se vrátí, až bude připojení.")}</Alert.Description>
           </Alert.Content>
         </Alert>
       )}
 
       {!supported ? (
-        <EmptyView icon="cloud_off" title="Offline tady nejde">
-          Prohlížeč ukládá soubory offline jen přes HTTPS. Otevři cloud přes adresu z <code>tailscale serve</code> (https://…ts.net) a nainstaluj ho jako
-          aplikaci.
+        <EmptyView icon="cloud_off" title={t("Offline isn't available here", "Offline tady nejde")}>
+          {t("Browsers only save files offline over HTTPS. Open the cloud through the address from", "Prohlížeč ukládá soubory offline jen přes HTTPS. Otevři cloud přes adresu z")} <code>tailscale serve</code> (https://…ts.net){" "}
+          {t("and install it as an app.", "a nainstaluj ho jako aplikaci.")}
         </EmptyView>
       ) : !files ? (
         <LoadingRows count={3} />
       ) : !entries.length ? (
-        <EmptyView icon="offline_pin" title="Nic uloženého">
-          V souborech klikni pravým tlačítkem na soubor a vyber <b>Zpřístupnit offline</b>.
+        <EmptyView icon="offline_pin" title={t("Nothing saved", "Nic uloženého")}>
+          {t("Right-click a file and choose", "V souborech klikni pravým tlačítkem na soubor a vyber")} <b>{t("Make available offline", "Zpřístupnit offline")}</b>.
         </EmptyView>
       ) : (
         <ListPanel>
@@ -109,13 +114,13 @@ export default function OfflinePage() {
                   <div className="min-w-0 flex-1">
                     <p className="truncate text-sm font-medium">{entry.name}</p>
                     <p className="text-xs text-muted">
-                      {FormatBytes(entry.size)} · uloženo {FormatDate(entry.savedAt)}
+                      {FormatBytes(entry.size)} · {t("saved", "uloženo")} {FormatDate(entry.savedAt)}
                     </p>
                   </div>
-                  <Button isIconOnly size="sm" variant="ghost" aria-label={`Stáhnout ${entry.name}`} onPress={() => Download(entry)}>
+                  <Button isIconOnly size="sm" variant="ghost" aria-label={`${t("Download", "Stáhnout")} ${entry.name}`} onPress={() => Download(entry)}>
                     <Icon name="download" className="text-[18px]" />
                   </Button>
-                  <Button isIconOnly size="sm" variant="ghost" aria-label={`Odebrat ${entry.name} z offline`} onPress={() => Remove(entry)} className="text-danger!">
+                  <Button isIconOnly size="sm" variant="ghost" aria-label={t(`Remove ${entry.name} from offline`, `Odebrat ${entry.name} z offline`)} onPress={() => Remove(entry)} className="text-danger!">
                     <Icon name="delete" className="text-[18px]" />
                   </Button>
                 </ClickableRow>

@@ -6,6 +6,7 @@ import { Db } from "../Db.ts";
 import { PersonById } from "../People.ts";
 import { GetThumb } from "../Thumbs.ts";
 import { GetRootDir, GetView, HttpError, ListDir, RelFromRoot, Resolve, SendFile, SendThumb, StatOrThrow } from "../Storage.ts";
+import { T } from "../Lang.ts";
 
 interface ShareRow {
   token: string;
@@ -21,7 +22,7 @@ function FindShare(token: string) {
   const row = Db.prepare("SELECT * FROM shares WHERE token = ? AND (expires_at IS NULL OR expires_at > ?)").get(token, Date.now()) as
     | ShareRow
     | undefined;
-  if (!row) throw new HttpError(404, "Odkaz neexistuje nebo vypršel.");
+  if (!row) throw new HttpError(404, T("This link does not exist or has expired.", "Odkaz neexistuje nebo vypršel."));
   return row;
 }
 
@@ -29,7 +30,7 @@ function FindShare(token: string) {
 function ResolveInShare(share: ShareRow, clientPath: string) {
   const base = path.join(GetRootDir(), ...share.path.split("/"));
   if (!share.is_dir) {
-    if (clientPath) throw new HttpError(404, "Soubor neexistuje.");
+    if (clientPath) throw new HttpError(404, T("File not found.", "Soubor neexistuje."));
     return { abs: base, rel: "" };
   }
   return Resolve({ base, prefix: share.path }, clientPath);
@@ -70,7 +71,7 @@ export async function ShareRoutes(app: FastifyInstance) {
       async (request) => {
         const body = request.body as { path: string; all: boolean; expiresInDays: number | null };
         const { abs, rel, relToRoot } = Resolve(GetView(request.user, { all: body.all }), body.path);
-        if (!rel) throw new HttpError(400, "Celou domovskou složku sdílet nejde, vyber konkrétní položku.");
+        if (!rel) throw new HttpError(400, T("You can't share your whole home folder. Pick a specific item.", "Celou domovskou složku sdílet nejde, vyber konkrétní položku."));
         const stat = await StatOrThrow(abs);
         const token = randomBytes(16).toString("base64url");
         const expiresAt = body.expiresInDays ? Date.now() + body.expiresInDays * 86_400_000 : null;
@@ -122,7 +123,7 @@ export async function ShareRoutes(app: FastifyInstance) {
   app.get("/public/shares/:token/thumb", { config: PublicLimit, schema: { querystring: PublicQuery } }, async (request, reply) => {
     const share = FindShare((request.params as { token: string }).token);
     const thumb = await GetThumb(ResolveInShare(share, (request.query as { path: string }).path).abs);
-    if (!thumb) throw new HttpError(404, "Náhled není k dispozici.");
+    if (!thumb) throw new HttpError(404, T("Preview not available.", "Náhled není k dispozici."));
     return SendThumb(reply, thumb);
   });
 

@@ -15,6 +15,7 @@ import { TrashRoutes } from "./Routes/TrashRoutes.ts";
 import { UserShareRoutes } from "./Routes/UserShareRoutes.ts";
 import { HttpError, PurgeOldTrash } from "./Storage.ts";
 import { PurgeOldThumbs } from "./Thumbs.ts";
+import { LangOf, LangStore, T } from "./Lang.ts";
 
 // 'unsafe-inline' kvůli inline skriptům Next.js bez nonce.
 const PAGE_CSP = [
@@ -45,16 +46,19 @@ export async function BuildApp() {
   await app.register(multipart, { limits: { fileSize: Number.POSITIVE_INFINITY, files: 1 } });
   await app.register(rateLimit, { global: false });
 
+  // Jazyk hlášek pro celý request (T() v Lang.ts).
+  app.addHook("onRequest", (request, _reply, done) => LangStore.run(LangOf(request.headers["x-lang"]), done));
+
   app.setErrorHandler((error: AppError, request, reply) => {
     if (error instanceof HttpError) return reply.code(error.status).send({ error: error.message });
-    if (error.validation) return reply.code(400).send({ error: "Neplatný požadavek." });
-    if (error.code === "ENOENT") return reply.code(404).send({ error: "Soubor nebo složka neexistuje." });
-    if (error.code === "EACCES" || error.code === "EPERM") return reply.code(403).send({ error: "Server k tomuhle nemá na disku přístup." });
-    if (error.code === "ENOSPC") return reply.code(507).send({ error: "Na disku došlo místo." });
-    if (error.code === "ENAMETOOLONG") return reply.code(400).send({ error: "Název nebo cesta je moc dlouhá." });
+    if (error.validation) return reply.code(400).send({ error: T("Invalid request.", "Neplatný požadavek.") });
+    if (error.code === "ENOENT") return reply.code(404).send({ error: T("File or folder not found.", "Soubor nebo složka neexistuje.") });
+    if (error.code === "EACCES" || error.code === "EPERM") return reply.code(403).send({ error: T("The server has no access to this on disk.", "Server k tomuhle nemá na disku přístup.") });
+    if (error.code === "ENOSPC") return reply.code(507).send({ error: T("The disk is full.", "Na disku došlo místo.") });
+    if (error.code === "ENAMETOOLONG") return reply.code(400).send({ error: T("The name or path is too long.", "Název nebo cesta je moc dlouhá.") });
     const status = error.statusCode ?? 500;
     if (status >= 500) request.log.error(error);
-    return reply.code(status).send({ error: status >= 500 && Env.IsProduction ? "Něco se pokazilo. Zkus to znovu." : error.message });
+    return reply.code(status).send({ error: status >= 500 && Env.IsProduction ? T("Something went wrong. Please try again.", "Něco se pokazilo. Zkus to znovu.") : error.message });
   });
 
   app.addHook("onSend", async (_request, reply) => {
@@ -75,7 +79,7 @@ export async function BuildApp() {
       await api.register(ShareRoutes);
       await api.register(UserShareRoutes);
       await api.register(AdminRoutes);
-      api.setNotFoundHandler((_request, reply) => reply.code(404).send({ error: "Neznámý endpoint." }));
+      api.setNotFoundHandler((_request, reply) => reply.code(404).send({ error: T("Unknown endpoint.", "Neznámý endpoint.") }));
     },
     { prefix: "/api" },
   );
@@ -85,7 +89,7 @@ export async function BuildApp() {
     await app.register(fastifyStatic, { root: Env.WebDir, redirect: true });
     // Wildcard routa statiky chytá i GET /api/neco — ty mají dostat JSON, ne HTML stránku.
     app.setNotFoundHandler((request, reply) =>
-      request.url.startsWith("/api/") ? reply.code(404).send({ error: "Neznámý endpoint." }) : reply.code(404).sendFile("404.html"),
+      request.url.startsWith("/api/") ? reply.code(404).send({ error: T("Unknown endpoint.", "Neznámý endpoint.") }) : reply.code(404).sendFile("404.html"),
     );
   }
 
@@ -103,5 +107,5 @@ if (import.meta.main) {
   setInterval(Housekeeping, 6 * 3_600_000).unref();
 
   await app.listen({ port: Env.Port, host: Env.Host });
-  console.log(`\x1b[1;31m●\x1b[0m Cloud běží na http://${Env.Host}:${Env.Port}`);
+  console.log(`\x1b[1;31m●\x1b[0m Cloud is running at http://${Env.Host}:${Env.Port}`);
 }

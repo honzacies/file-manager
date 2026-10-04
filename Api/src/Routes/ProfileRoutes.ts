@@ -5,6 +5,7 @@ import { RequireUser } from "../Auth.ts";
 import { Db } from "../Db.ts";
 import { AVATAR_DIR, AvatarPath, NormalizeName, PersonById } from "../People.ts";
 import { HttpError } from "../Storage.ts";
+import { T } from "../Lang.ts";
 
 const AVATAR_MAX_BYTES = 512 * 1024;
 
@@ -34,12 +35,12 @@ export async function ProfileRoutes(app: FastifyInstance) {
 
   app.post("/account/avatar", async (request) => {
     const file = await request.file({ limits: { fileSize: AVATAR_MAX_BYTES } });
-    if (!file) throw new HttpError(400, "Chybí obrázek.");
+    if (!file) throw new HttpError(400, T("No image was sent.", "Chybí obrázek."));
     const buffer = await file.toBuffer().catch(() => {
-      throw new HttpError(413, "Obrázek je moc velký.");
+      throw new HttpError(413, T("The image is too large.", "Obrázek je moc velký."));
     });
-    if (file.file.truncated) throw new HttpError(413, "Obrázek je moc velký.");
-    if (!IsWebp(buffer)) throw new HttpError(400, "Obrázek musí být WebP (appka ho převádí sama).");
+    if (file.file.truncated) throw new HttpError(413, T("The image is too large.", "Obrázek je moc velký."));
+    if (!IsWebp(buffer)) throw new HttpError(400, T("The image must be WebP (the app converts it automatically).", "Obrázek musí být WebP (appka ho převádí sama)."));
     mkdirSync(AVATAR_DIR, { recursive: true });
     // Nejdřív do dočasného souboru, ať nikdo nedostane napůl zapsaný obrázek.
     const target = AvatarPath(request.user.id);
@@ -59,7 +60,7 @@ export async function ProfileRoutes(app: FastifyInstance) {
   app.get("/users/:id/avatar", async (request, reply) => {
     const id = Number((request.params as { id: string }).id);
     const file = AvatarPath(id);
-    if (!Number.isInteger(id) || !existsSync(file)) throw new HttpError(404, "Avatar neexistuje.");
+    if (!Number.isInteger(id) || !existsSync(file)) throw new HttpError(404, T("Avatar not found.", "Avatar neexistuje."));
     return reply
       .header("Content-Type", "image/webp")
       .header("X-Content-Type-Options", "nosniff")

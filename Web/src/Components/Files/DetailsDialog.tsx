@@ -7,6 +7,7 @@ import { FormatBytes, FormatDate } from "@/lib/format";
 import { AppDialog } from "../AppDialog";
 import { FileIcon } from "../FileIcon";
 import { type Person, PersonLabel } from "../UserAvatar";
+import { Plural, t } from "@/lib/i18n";
 
 interface Details {
   name: string;
@@ -67,7 +68,7 @@ export function DetailsDialog({
           <span className="truncate">{target?.name}</span>
         </span>
       }
-      footer={<Button onPress={onClose}>Zavřít</Button>}
+      footer={<Button onPress={onClose}>{t("Close", "Zavřít")}</Button>}
     >
       {error ? (
         <p className="text-sm text-danger">{error}</p>
@@ -79,31 +80,30 @@ export function DetailsDialog({
         </div>
       ) : (
         <dl className="divide-y divide-separator">
-          <Row label="Typ">{details.isDir ? "Složka" : "Soubor"}</Row>
-          <Row label="Velikost">
+          <Row label={t("Type", "Typ")}>{details.isDir ? t("Folder", "Složka") : t("File", "Soubor")}</Row>
+          <Row label={t("Size", "Velikost")}>
             {FormatBytes(details.size)}
             {details.isDir && (
               <span className="text-muted">
                 {" "}
-                · {details.files} {details.files === 1 ? "soubor" : details.files < 5 && details.files > 0 ? "soubory" : "souborů"}, {details.folders}{" "}
-                {details.folders === 1 ? "složka" : details.folders < 5 && details.folders > 0 ? "složky" : "složek"}
+                · {details.files} {Plural(details.files, ["file", "files"], ["soubor", "soubory", "souborů"])}, {details.folders} {Plural(details.folders, ["folder", "folders"], ["složka", "složky", "složek"])}
               </span>
             )}
           </Row>
-          <Row label="Umístění">{location}</Row>
+          <Row label={t("Location", "Umístění")}>{location}</Row>
           {details.owner && (
-            <Row label="Vlastník">
+            <Row label={t("Owner", "Vlastník")}>
               <PersonLabel person={details.owner} />
             </Row>
           )}
-          <Row label="Změněno">{FormatDate(details.modified)}</Row>
-          <Row label="Vytvořeno">{FormatDate(details.created)}</Row>
+          <Row label={t("Modified", "Změněno")}>{FormatDate(details.modified)}</Row>
+          <Row label={t("Created", "Vytvořeno")}>{FormatDate(details.created)}</Row>
           {(details.sharedWith.length > 0 || details.links > 0) && (
-            <Row label="Sdíleno">
-              {details.sharedWith.map((person) => `${person.username} (${person.canWrite ? "upravuje" : "zobrazí"})`).join(", ")}
+            <Row label={t("Shared", "Sdíleno")}>
+              {details.sharedWith.map((person) => `${person.username} (${person.canWrite ? t("can edit", "upravuje") : t("can view", "zobrazí")})`).join(", ")}
               {details.links > 0 && (
                 <span className="block text-muted">
-                  {details.links} {details.links === 1 ? "veřejný odkaz" : "veřejné odkazy"}
+                  {details.links} {Plural(details.links, ["public link", "public links"], ["veřejný odkaz", "veřejné odkazy", "veřejných odkazů"])}
                 </span>
               )}
             </Row>

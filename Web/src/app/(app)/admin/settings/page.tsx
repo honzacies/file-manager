@@ -10,6 +10,7 @@ import { Panel } from "@/Components/Panel";
 import { ErrorView, LoadingRows } from "@/Components/StateViews";
 import { ApiFetch, ErrorText, Query } from "@/lib/api";
 import { FormatBytes } from "@/lib/format";
+import { t } from "@/lib/i18n";
 
 interface Settings {
   rootDir: string;
@@ -42,21 +43,21 @@ function FolderPicker({ isOpen, start, onClose, onPick }: { isOpen: boolean; sta
     <AppDialog
       isOpen={isOpen}
       onOpenChange={(open) => !open && onClose()}
-      title="Vybrat složku na serveru"
+      title={t("Choose a folder on the server", "Vybrat složku na serveru")}
       footer={
         <>
           <Button variant="tertiary" onPress={onClose}>
-            Zrušit
+            {t("Cancel", "Zrušit")}
           </Button>
           <Button onPress={() => data && onPick(data.path)} isDisabled={!data}>
-            Vybrat tuhle složku
+            {t("Choose this folder", "Vybrat tuhle složku")}
           </Button>
         </>
       }
     >
       <div className="flex flex-col gap-3">
         <div className="flex items-center gap-2">
-          <Button isIconOnly size="sm" variant="secondary" aria-label="O úroveň výš" isDisabled={!data?.parent} onPress={() => data?.parent && setPath(data.parent)}>
+          <Button isIconOnly size="sm" variant="secondary" aria-label={t("Up one level", "O úroveň výš")} isDisabled={!data?.parent} onPress={() => data?.parent && setPath(data.parent)}>
             <Icon name="arrow_upward" className="text-[18px]" />
           </Button>
           <code className="min-w-0 flex-1 truncate rounded-lg bg-surface-secondary px-3 py-1.5 text-sm">{data?.path ?? path}</code>
@@ -69,7 +70,7 @@ function FolderPicker({ isOpen, start, onClose, onPick }: { isOpen: boolean; sta
               <Spinner />
             </div>
           ) : data.dirs.length === 0 ? (
-            <p className="grid h-full place-items-center text-sm text-muted">Žádné podsložky</p>
+            <p className="grid h-full place-items-center text-sm text-muted">{t("No subfolders", "Žádné podsložky")}</p>
           ) : (
             <ul className="p-1">
               {data.dirs.map((name) => (
@@ -118,7 +119,7 @@ export default function SettingsPage() {
     const result = await ApiFetch("/api/admin/settings", "PUT", { rootDir: rootDir.trim() });
     setPending(false);
     if (!result.ok) return setSaveError(ErrorText(result));
-    toast.success("Kořenová složka uložena");
+    toast.success(t("Root folder saved", "Kořenová složka uložena"));
     Load();
   }
 
@@ -128,7 +129,7 @@ export default function SettingsPage() {
   return (
     <AdminOnly>
       <div className="flex max-w-2xl flex-col gap-6">
-        <PageHeader title="Nastavení" description="Kde cloud ukládá soubory." />
+        <PageHeader title={t("Settings", "Nastavení")} description={t("Where the cloud stores files.", "Kde cloud ukládá soubory.")} />
         {error ? (
           <ErrorView message={error} onRetry={Load} />
         ) : !settings ? (
@@ -136,39 +137,42 @@ export default function SettingsPage() {
         ) : (
           <>
             <Panel>
-              <h2 className="mb-1 font-semibold">Kořenová složka</h2>
+              <h2 className="mb-1 font-semibold">{t("Root folder", "Kořenová složka")}</h2>
               <p className="mb-5 text-sm text-muted">
-                Každý uživatel má v ní vlastní podsložku podle jména. Smazané položky čekají ve skryté <code>.trash</code>.
+                {t("Each user gets their own subfolder named after them. Deleted items wait in the hidden", "Každý uživatel má v ní vlastní podsložku podle jména. Smazané položky čekají ve skryté")} <code>.trash</code>.
               </p>
               <Form onSubmit={Save} className="flex flex-col gap-4">
                 <div className="flex flex-col gap-2 sm:flex-row sm:items-end">
                   <TextField value={rootDir} onChange={(value) => (setRootDir(value), setSaveError(null))} isInvalid={!!saveError} className="flex-1" isRequired>
-                    <Label>Cesta na serveru</Label>
+                    <Label>{t("Path on the server", "Cesta na serveru")}</Label>
                     <Input className="font-mono text-sm" autoComplete="off" spellCheck={false} />
                   </TextField>
                   <Button variant="secondary" onPress={() => setPicker(true)}>
                     <Icon name="folder_open" className="text-[18px]" />
-                    Procházet…
+                    {t("Browse…", "Procházet…")}
                   </Button>
                 </div>
                 {saveError && <p className="-mt-2 text-sm text-danger">{saveError}</p>}
                 <Alert status="warning">
                   <Alert.Indicator />
                   <Alert.Content>
-                    <Alert.Title>Soubory se nepřesouvají</Alert.Title>
+                    <Alert.Title>{t("Files aren't moved", "Soubory se nepřesouvají")}</Alert.Title>
                     <Alert.Description>
-                      Po změně cloud začne používat novou složku a stávající soubory zůstanou ve staré. Chceš-li je zachovat, přesuň je na serveru ručně. V Dockeru jsou
-                      trvalé jen složky namountované z hostitele (výchozí <code>{settings.defaultRootDir}</code>).
+                      {t(
+                        "After the change the cloud uses the new folder and existing files stay in the old one. To keep them, move them on the server yourself. In Docker, only folders mounted from the host persist (default",
+                        "Po změně cloud začne používat novou složku a stávající soubory zůstanou ve staré. Chceš-li je zachovat, přesuň je na serveru ručně. V Dockeru jsou trvalé jen složky namountované z hostitele (výchozí",
+                      )}{" "}
+                      <code>{settings.defaultRootDir}</code>).
                     </Alert.Description>
                   </Alert.Content>
                 </Alert>
                 <div className="flex gap-2">
                   <Button type="submit" isPending={pending} isDisabled={!changed}>
-                    Uložit
+                    {t("Save", "Uložit")}
                   </Button>
                   {changed && (
                     <Button variant="tertiary" onPress={() => setRootDir(settings.rootDir)}>
-                      Vrátit
+                      {t("Revert", "Vrátit")}
                     </Button>
                   )}
                 </div>
@@ -178,14 +182,17 @@ export default function SettingsPage() {
             {settings.disk && (
               <Panel>
                 <Meter value={used} maxValue={settings.disk.total} color={used / settings.disk.total > 0.9 ? "danger" : "accent"}>
-                  <Label className="font-semibold">Disk s kořenovou složkou</Label>
+                  <Label className="font-semibold">{t("Disk with the root folder", "Disk s kořenovou složkou")}</Label>
                   <Meter.Output className="tabular-nums" />
                   <Meter.Track>
                     <Meter.Fill />
                   </Meter.Track>
                 </Meter>
                 <p className="mt-2 text-sm text-muted tabular-nums">
-                  Obsazeno {FormatBytes(used)} z {FormatBytes(settings.disk.total)}, volných {FormatBytes(settings.disk.free)}.
+                  {t(
+                    `${FormatBytes(used)} of ${FormatBytes(settings.disk.total)} used, ${FormatBytes(settings.disk.free)} free.`,
+                    `Obsazeno ${FormatBytes(used)} z ${FormatBytes(settings.disk.total)}, volných ${FormatBytes(settings.disk.free)}.`,
+                  )}
                 </p>
               </Panel>
             )}

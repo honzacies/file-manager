@@ -4,6 +4,7 @@ import { Switch } from "@heroui/react";
 import { useTheme } from "next-themes";
 import { useEffect, useState } from "react";
 import { Icon } from "./Icon";
+import { t } from "@/lib/i18n";
 
 // next-themes si volbu drží sám v localStorage (klíč "theme") a při dalších
 // návštěvách ji respektuje — žádný vlastní perzistenční kód netřeba.
@@ -36,7 +37,7 @@ export function ThemeToggle() {
           </Switch.Thumb>
         </Switch.Control>
         <span className="text-sm text-muted">
-          {isDark ? "Tmavý" : "Světlý"} režim
+          {isDark ? t("Dark mode", "Tmavý režim") : t("Light mode", "Světlý režim")}
         </span>
       </Switch.Content>
     </Switch>

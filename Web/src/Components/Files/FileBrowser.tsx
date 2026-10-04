@@ -22,6 +22,7 @@ import { PathBreadcrumbs } from "./PathBreadcrumbs";
 import { PreviewModal } from "./PreviewModal";
 import { ShareDialog } from "./ShareDialog";
 import { UserShareDialog } from "./UserShareDialog";
+import { Plural, t } from "@/lib/i18n";
 
 type DialogState =
   | { kind: "newFolder" }
@@ -36,7 +37,7 @@ type DialogState =
 const VIEW_KEY = "cloud.view";
 
 // Řazení v menu — na mobilu a v mřížce, kde nejsou hlavičky sloupců.
-const SORT_LABELS: Record<SortKey, string> = { name: "Název", modified: "Změněno", size: "Velikost" };
+const SortLabels = (): Record<SortKey, string> => ({ name: t("Name", "Název"), modified: t("Modified", "Změněno"), size: t("Size", "Velikost") });
 
 // Sdílení, které mi někdo poslal (z /api/user-shares/incoming).
 interface IncomingShare {
@@ -218,54 +219,54 @@ export function FileBrowser() {
     if (!targets.length) return [];
     const single = targets.length === 1 ? targets[0] : null;
     const allStarred = targets.every((entry) => entry.starred);
-    const star: Action = { id: allStarred ? "unstar" : "star", label: allStarred ? "Odebrat hvězdičku" : "Označit hvězdičkou", icon: allStarred ? "star_half" : "star" };
+    const star: Action = { id: allStarred ? "unstar" : "star", label: allStarred ? t("Remove star", "Odebrat hvězdičku") : t("Add star", "Označit hvězdičkou"), icon: allStarred ? "star_half" : "star" };
     const canShare = !readOnly && !share;
     const download: Action = {
       id: "download",
-      label: single && !single.isDir ? "Stáhnout" : "Stáhnout jako ZIP",
+      label: single && !single.isDir ? t("Download", "Stáhnout") : t("Download as ZIP", "Stáhnout jako ZIP"),
       icon: single && !single.isDir ? "download" : "folder_zip",
     };
     const shareMenu: Action = {
       id: "shareMenu",
-      label: "Sdílet",
+      label: t("Share", "Sdílet"),
       icon: "person_add",
       separated: true,
       children: [
-        { id: "shareUsers", label: "Sdílet s uživateli", icon: "group_add" },
-        { id: "share", label: "Veřejný odkaz", icon: "link" },
+        { id: "shareUsers", label: t("Share with users", "Sdílet s uživateli"), icon: "group_add" },
+        { id: "share", label: t("Public link", "Veřejný odkaz"), icon: "link" },
       ],
     };
-    const trash: Action = { id: "delete", label: "Přesunout do koše", icon: "delete", danger: true, shortcut: "Del", separated: true };
+    const trash: Action = { id: "delete", label: t("Move to trash", "Přesunout do koše"), icon: "delete", danger: true, shortcut: "Del", separated: true };
 
     if (!single) {
       return [
         download,
-        { id: "organize", label: "Uspořádat", icon: "folder_open", separated: true, children: [...(readOnly ? [] : [{ id: "move", label: "Přesunout", icon: "drive_file_move" }]), star] },
+        { id: "organize", label: t("Organize", "Uspořádat"), icon: "folder_open", separated: true, children: [...(readOnly ? [] : [{ id: "move", label: t("Move", "Přesunout"), icon: "drive_file_move" }]), star] },
         ...(readOnly ? [] : [trash]),
       ];
     }
 
     if (single.isDir) {
       return [
-        { id: "open", label: "Otevřít", icon: "folder_open", shortcut: "Enter" },
+        { id: "open", label: t("Open", "Otevřít"), icon: "folder_open", shortcut: "Enter" },
         download,
-        ...(readOnly ? [] : [{ id: "rename", label: "Přejmenovat", icon: "edit", shortcut: "F2" }]),
+        ...(readOnly ? [] : [{ id: "rename", label: t("Rename", "Přejmenovat"), icon: "edit", shortcut: "F2" }]),
         ...(canShare ? [shareMenu] : []),
         {
           id: "organize",
-          label: "Uspořádat",
+          label: t("Organize", "Uspořádat"),
           icon: "folder_open",
           separated: !canShare,
-          children: [...(readOnly ? [] : [{ id: "move", label: "Přesunout", icon: "drive_file_move" }]), star],
+          children: [...(readOnly ? [] : [{ id: "move", label: t("Move", "Přesunout"), icon: "drive_file_move" }]), star],
           ...(!readOnly && { palette: { value: single.color, onPick: (color: string | null) => SetColor(single, color) } }),
         },
         {
           id: "info",
-          label: "Informace o složce",
+          label: t("Folder info", "Informace o složce"),
           icon: "info",
           children: [
-            { id: "details", label: "Podrobnosti", icon: "info" },
-            { id: "searchIn", label: "Vyhledat ve složce", icon: "search" },
+            { id: "details", label: t("Details", "Podrobnosti"), icon: "info" },
+            { id: "searchIn", label: t("Search in folder", "Vyhledat ve složce"), icon: "search" },
           ],
         },
         ...(readOnly ? [] : [trash]),
@@ -276,37 +277,37 @@ export function FileBrowser() {
     return [
       {
         id: "openWith",
-        label: "Otevřít pomocí",
+        label: t("Open with", "Otevřít pomocí"),
         icon: "open_with",
         children: [
-          ...(CanPreview(single) ? [{ id: "open", label: "Náhled v cloudu", icon: "visibility" }] : []),
-          { id: "newTab", label: "Otevřít v nové kartě", icon: "open_in_new" },
+          ...(CanPreview(single) ? [{ id: "open", label: t("Preview in Cloud", "Náhled v cloudu"), icon: "visibility" }] : []),
+          { id: "newTab", label: t("Open in new tab", "Otevřít v nové kartě"), icon: "open_in_new" },
         ],
       },
       { ...download, separated: true },
       ...(readOnly
         ? []
         : [
-            { id: "rename", label: "Přejmenovat", icon: "edit", shortcut: "F2" },
-            { id: "copy", label: "Vytvořit kopii", icon: "content_copy" },
+            { id: "rename", label: t("Rename", "Přejmenovat"), icon: "edit", shortcut: "F2" },
+            { id: "copy", label: t("Make a copy", "Vytvořit kopii"), icon: "content_copy" },
           ]),
       ...(canShare ? [shareMenu] : []),
-      { id: "organize", label: "Uspořádat", icon: "folder_open", separated: !canShare, children: [...(readOnly ? [] : [{ id: "move", label: "Přesunout", icon: "drive_file_move" }]), star] },
-      { id: "details", label: "Informace o souboru", icon: "info" },
-      { id: "offline", label: saved ? "Odebrat z offline" : "Zpřístupnit offline", icon: saved ? "offline_pin" : "download_for_offline" },
+      { id: "organize", label: t("Organize", "Uspořádat"), icon: "folder_open", separated: !canShare, children: [...(readOnly ? [] : [{ id: "move", label: t("Move", "Přesunout"), icon: "drive_file_move" }]), star] },
+      { id: "details", label: t("File info", "Informace o souboru"), icon: "info" },
+      { id: "offline", label: saved ? t("Remove from offline", "Odebrat z offline") : t("Make available offline", "Zpřístupnit offline"), icon: saved ? "offline_pin" : "download_for_offline" },
       ...(readOnly ? [] : [trash]),
     ];
   }
 
-  const BACKGROUND_ACTIONS: Action[] = [
+  const backgroundActions: Action[] = [
     ...(readOnly
       ? []
       : [
-          { id: "newFolder", label: "Nová složka", icon: "create_new_folder" },
-          { id: "uploadFiles", label: "Nahrát soubory", icon: "upload_file" },
-          { id: "uploadFolder", label: "Nahrát složku", icon: "drive_folder_upload" },
+          { id: "newFolder", label: t("New folder", "Nová složka"), icon: "create_new_folder" },
+          { id: "uploadFiles", label: t("Upload files", "Nahrát soubory"), icon: "upload_file" },
+          { id: "uploadFolder", label: t("Upload folder", "Nahrát složku"), icon: "drive_folder_upload" },
         ]),
-    { id: "refresh", label: "Obnovit", icon: "refresh", separated: !readOnly },
+    { id: "refresh", label: t("Refresh", "Obnovit"), icon: "refresh", separated: !readOnly },
   ];
 
   function RunAction(id: string, targets: Entry[]) {
@@ -366,25 +367,37 @@ export function FileBrowser() {
     const result = await Mutate("/api/files/delete", { paths: PathsOf(names) });
     setPending(false);
     setDialog(null);
-    if (result.ok) toast.success(names.length === 1 ? `„${BaseName(names[0])}“ je v koši` : `${names.length} položek přesunuto do koše`);
+    if (result.ok) toast.success(
+        names.length === 1
+          ? t(`“${BaseName(names[0])}” moved to trash`, `„${BaseName(names[0])}“ je v koši`)
+          : t(`${names.length} items moved to trash`, `${names.length} ${Plural(names.length, ["", ""], ["položka přesunuta", "položky přesunuty", "položek přesunuto"])} do koše`),
+      );
   }
 
   async function MoveInto(destination: string, names: string[]) {
     const result = await Mutate("/api/files/move", { paths: PathsOf(names), destination });
     if (result.ok) {
       setDialog(null);
-      toast.success(names.length === 1 ? `„${BaseName(names[0])}“ přesunuto` : `${names.length} položek přesunuto`);
+      toast.success(
+        names.length === 1
+          ? t(`“${BaseName(names[0])}” moved`, `„${BaseName(names[0])}“ přesunuto`)
+          : t(`${names.length} items moved`, `${names.length} ${Plural(names.length, ["", ""], ["položka přesunuta", "položky přesunuty", "položek přesunuto"])}`),
+      );
     }
   }
 
   async function Copy(targets: Entry[]) {
     const result = await Mutate("/api/files/copy", { paths: PathsOf(targets.map((entry) => entry.name)) });
-    if (result.ok) toast.success(targets.length === 1 ? `Vytvořena kopie „${BaseName(targets[0].name)}“` : `Vytvořeno ${targets.length} kopií`);
+    if (result.ok) toast.success(
+        targets.length === 1
+          ? t(`Copy of “${BaseName(targets[0].name)}” created`, `Vytvořena kopie „${BaseName(targets[0].name)}“`)
+          : t(`${targets.length} copies created`, `Vytvořeno ${targets.length} ${Plural(targets.length, ["", ""], ["kopie", "kopie", "kopií"])}`),
+      );
   }
 
   async function Star(targets: Entry[], starred: boolean) {
     const result = await Mutate("/api/files/star", { paths: PathsOf(targets.map((entry) => entry.name)), starred });
-    if (result.ok) toast.success(starred ? "Přidáno do S hvězdičkou" : "Odebráno z S hvězdičkou");
+    if (result.ok) toast.success(starred ? t("Added to Starred", "Přidáno do S hvězdičkou") : t("Removed from Starred", "Odebráno z S hvězdičkou"));
   }
 
   async function SetColor(entry: Entry, color: string | null) {
@@ -486,11 +499,12 @@ export function FileBrowser() {
 
   // Cíl kontextového menu: pravý klik na označenou položku = celý výběr.
   const menuTargets = menu?.entry ? (selected.has(menu.entry.name) ? selectedEntries : [menu.entry]) : [];
-  const rootTitle = share ? (shareInfo?.name ?? "Sdílená složka") : all ? "Všechny soubory" : "Moje soubory";
+  const rootTitle = share ? (shareInfo?.name ?? t("Shared folder", "Sdílená složka")) : all ? t("All files", "Všechny soubory") : t("My files", "Moje soubory");
   const description = share
-    ? shareInfo && `Sdílí ${shareInfo.owner.name} · ${readOnly ? "jen pro čtení" : "můžeš upravovat"}`
+    ? shareInfo &&
+      `${t("Shared by", "Sdílí")} ${shareInfo.owner.name} · ${readOnly ? t("read-only", "jen pro čtení") : t("you can edit", "můžeš upravovat")}`
     : all
-      ? "Celý kořen cloudu včetně složek všech uživatelů."
+      ? t("The whole cloud root, including every user's folder.", "Celý kořen cloudu včetně složek všech uživatelů.")
       : undefined;
   const folderName = path.split("/").pop() || rootTitle;
   const renameEntry = dialog?.kind === "rename" ? dialog.entry : null;
@@ -525,23 +539,23 @@ export function FileBrowser() {
             <>
               <Button variant="secondary" onPress={() => setDialog({ kind: "newFolder" })}>
                 <Icon name="create_new_folder" className="text-[18px]" />
-                Nová složka
+                {t("New folder", "Nová složka")}
               </Button>
               <Dropdown>
                 <Button>
                   <Icon name="upload" className="text-[18px]" />
-                  Nahrát
+                  {t("Upload", "Nahrát")}
                   <Icon name="expand_more" className="-mr-1 text-[18px]" />
                 </Button>
                 <Dropdown.Popover placement="bottom end">
-                  <Dropdown.Menu aria-label="Nahrát" onAction={(key) => RunAction(String(key), [])}>
-                    <Dropdown.Item id="uploadFiles" textValue="Soubory">
+                  <Dropdown.Menu aria-label={t("Upload", "Nahrát")} onAction={(key) => RunAction(String(key), [])}>
+                    <Dropdown.Item id="uploadFiles" textValue={t("Files", "Soubory")}>
                       <Icon name="upload_file" className="text-[18px] text-muted" />
-                      <Label>Soubory</Label>
+                      <Label>{t("Files", "Soubory")}</Label>
                     </Dropdown.Item>
-                    <Dropdown.Item id="uploadFolder" textValue="Složku">
+                    <Dropdown.Item id="uploadFolder" textValue={t("Folder", "Složku")}>
                       <Icon name="drive_folder_upload" className="text-[18px] text-muted" />
-                      <Label>Složku</Label>
+                      <Label>{t("Folder", "Složku")}</Label>
                     </Dropdown.Item>
                   </Dropdown.Menu>
                 </Dropdown.Popover>
@@ -552,7 +566,7 @@ export function FileBrowser() {
       />
 
       <SearchField
-        aria-label="Hledat v této složce, Enter hledá i v podsložkách"
+        aria-label={t("Search this folder; Enter also searches subfolders", "Hledat v této složce, Enter hledá i v podsložkách")}
         value={filter}
         onChange={setFilter}
         // Enter = hledat i v podsložkách, psaní = živý filtr aktuální složky
@@ -562,11 +576,11 @@ export function FileBrowser() {
       >
         <SearchField.Group className="h-11 rounded-full! px-2 shadow-sm sm:h-12">
           <SearchField.SearchIcon className="ml-1" />
-          <SearchField.Input ref={searchInput} placeholder={`Hledat v „${folderName}“`} className="text-base" />
+          <SearchField.Input ref={searchInput} placeholder={t(`Search in “${folderName}”`, `Hledat v „${folderName}“`)} className="text-base" />
           {/* nápověda jen při psaní — Enter spustí hledání i v podsložkách */}
           {filter.trim() && filter !== q && (
             <Kbd className="hidden shrink-0 sm:inline-flex" variant="light">
-              <Kbd.Content>↵ i v podsložkách</Kbd.Content>
+              <Kbd.Content>↵ {t("incl. subfolders", "i v podsložkách")}</Kbd.Content>
             </Kbd>
           )}
           <SearchField.ClearButton />
@@ -604,14 +618,16 @@ export function FileBrowser() {
             <b className="break-words">{pickedFolders.join(", ")}</b>
             <span className="text-muted">
               {" · "}
-              {folderPick.length} {folderPick.length === 1 ? "soubor" : folderPick.length < 5 ? "soubory" : "souborů"}
+              {folderPick.length} {Plural(folderPick.length, ["file", "files"], ["soubor", "soubory", "souborů"])}
             </span>
             {/* dialog prohlížeče pustí jen jednu složku, přetažení jich vezme víc naráz */}
-            <span className="block text-xs text-muted max-sm:hidden">Víc složek najednou: označ je v Průzkumníku a přetáhni sem.</span>
+            <span className="block text-xs text-muted max-sm:hidden">
+              {t("Several folders at once: select them in your file manager and drag them here.", "Víc složek najednou: označ je v Průzkumníku a přetáhni sem.")}
+            </span>
           </p>
           <Button size="sm" variant="tertiary" onPress={() => folderInput.current?.click()}>
             <Icon name="add" className="text-[18px]" />
-            Další složka
+            {t("Another folder", "Další složka")}
           </Button>
           <Button
             size="sm"
@@ -621,9 +637,9 @@ export function FileBrowser() {
             }}
           >
             <Icon name="upload" className="text-[18px]" />
-            Nahrát
+            {t("Upload", "Nahrát")}
           </Button>
-          <Button size="sm" isIconOnly variant="tertiary" aria-label="Zrušit výběr složek" onPress={() => setFolderPick([])}>
+          <Button size="sm" isIconOnly variant="tertiary" aria-label={t("Clear chosen folders", "Zrušit výběr složek")} onPress={() => setFolderPick([])}>
             <Icon name="close" className="text-[18px]" />
           </Button>
         </div>
@@ -632,38 +648,41 @@ export function FileBrowser() {
       {/* Lišta výběru nahrazuje řádek s cestou — stejná výška, seznam neposkočí. */}
       <div className="flex min-h-10 flex-wrap items-center gap-3">
         {selected.size > 0 ? (
-          <div className="flex min-h-10 w-full flex-wrap items-center gap-1 rounded-2xl bg-accent/10 py-1 pr-2 pl-4" role="toolbar" aria-label="Akce s výběrem">
+          <div className="flex min-h-10 w-full flex-wrap items-center gap-1 rounded-2xl bg-accent/10 py-1 pr-2 pl-4" role="toolbar" aria-label={t("Selection actions", "Akce s výběrem")}>
             <span className="mr-auto text-sm font-medium text-accent">
-              Označeno: {selected.size}
-              <span className="hidden font-normal text-muted lg:inline"> · klik přidá/odebere, Esc nebo ✕ zruší výběr</span>
+              {t("Selected", "Označeno")}: {selected.size}
+              <span className="hidden font-normal text-muted lg:inline">
+                {" · "}
+                {t("click adds/removes, Esc or ✕ clears", "klik přidá/odebere, Esc nebo ✕ zruší výběr")}
+              </span>
             </span>
             <Button size="sm" variant="tertiary" onPress={() => Download(selectedEntries)}>
               <Icon name={selectedEntries.length === 1 && !selectedEntries[0].isDir ? "download" : "folder_zip"} className="text-[18px]" />
-              <span className="hidden sm:inline">Stáhnout</span>
+              <span className="hidden sm:inline">{t("Download", "Stáhnout")}</span>
             </Button>
             {selectedEntries.length === 1 && !share && !readOnly && (
               <Button size="sm" variant="tertiary" onPress={() => RunAction("shareUsers", selectedEntries)}>
                 <Icon name="group_add" className="text-[18px]" />
-                <span className="hidden sm:inline">Sdílet</span>
+                <span className="hidden sm:inline">{t("Share", "Sdílet")}</span>
               </Button>
             )}
             <Button size="sm" variant="tertiary" onPress={() => Star(selectedEntries, !allStarred)}>
               <Icon name={allStarred ? "star_half" : "star"} className="text-[18px]" />
-              <span className="hidden sm:inline">{allStarred ? "Odebrat hvězdičku" : "Hvězdička"}</span>
+              <span className="hidden sm:inline">{allStarred ? t("Remove star", "Odebrat hvězdičku") : t("Star", "Hvězdička")}</span>
             </Button>
             {!readOnly && (
               <>
                 <Button size="sm" variant="tertiary" onPress={() => RunAction("move", selectedEntries)}>
                   <Icon name="drive_file_move" className="text-[18px]" />
-                  <span className="hidden sm:inline">Přesunout</span>
+                  <span className="hidden sm:inline">{t("Move", "Přesunout")}</span>
                 </Button>
                 <Button size="sm" variant="tertiary" onPress={() => RunAction("delete", selectedEntries)} className="text-danger!">
                   <Icon name="delete" className="text-[18px]" />
-                  <span className="hidden sm:inline">Smazat</span>
+                  <span className="hidden sm:inline">{t("Delete", "Smazat")}</span>
                 </Button>
               </>
             )}
-            <Button size="sm" isIconOnly variant="tertiary" aria-label="Zrušit výběr (Esc)" onPress={() => setSelected(new Set())}>
+            <Button size="sm" isIconOnly variant="tertiary" aria-label={t("Clear selection (Esc)", "Zrušit výběr (Esc)")} onPress={() => setSelected(new Set())}>
               <Icon name="close" className="text-[18px]" />
             </Button>
           </div>
@@ -674,42 +693,42 @@ export function FileBrowser() {
             </div>
             <Dropdown>
               {/* V seznamu na širší obrazovce se řadí klikem na hlavičku sloupce. */}
-              <Button size="sm" variant="tertiary" aria-label={`Řadit podle: ${SORT_LABELS[sort.key]}`} className={view === "grid" ? "" : "sm:hidden"}>
+              <Button size="sm" variant="tertiary" aria-label={`${t("Sort by", "Řadit podle")}: ${SortLabels()[sort.key]}`} className={view === "grid" ? "" : "sm:hidden"}>
                 <Icon name="swap_vert" className="text-[18px]" />
                 {/* Na mobilu jen ikony — na název sloupce v řádku s cestou není místo. */}
-                <span className="hidden sm:inline">{SORT_LABELS[sort.key]}</span>
+                <span className="hidden sm:inline">{SortLabels()[sort.key]}</span>
                 <Icon name={sort.dir === 1 ? "arrow_upward" : "arrow_downward"} className="-mr-1 text-[16px] text-muted" />
               </Button>
               <Dropdown.Popover placement="bottom end">
                 <Dropdown.Menu
-                  aria-label="Řadit podle"
+                  aria-label={t("Sort by", "Řadit podle")}
                   // Stejný sloupec znovu = obrátit směr (jako klik na hlavičku).
                   onAction={(key) => setSort((current) => ({ key: key as SortKey, dir: current.key === key ? ((current.dir * -1) as 1 | -1) : 1 }))}
                 >
-                  {(Object.keys(SORT_LABELS) as SortKey[]).map((key) => (
-                    <Dropdown.Item key={key} id={key} textValue={SORT_LABELS[key]}>
+                  {(Object.keys(SortLabels()) as SortKey[]).map((key) => (
+                    <Dropdown.Item key={key} id={key} textValue={SortLabels()[key]}>
                       <Icon
                         name={sort.dir === 1 ? "arrow_upward" : "arrow_downward"}
                         className={`text-[18px] text-muted ${sort.key === key ? "" : "invisible"}`}
                       />
-                      <Label>{SORT_LABELS[key]}</Label>
+                      <Label>{SortLabels()[key]}</Label>
                     </Dropdown.Item>
                   ))}
                 </Dropdown.Menu>
               </Dropdown.Popover>
             </Dropdown>
             <ToggleButtonGroup
-              aria-label="Zobrazení"
+              aria-label={t("View", "Zobrazení")}
               selectionMode="single"
               disallowEmptySelection
               selectedKeys={new Set([view])}
               onSelectionChange={(keys) => ChangeView([...keys][0] as "list" | "grid")}
               size="sm"
             >
-              <ToggleButton id="list" isIconOnly aria-label="Seznam">
+              <ToggleButton id="list" isIconOnly aria-label={t("List", "Seznam")}>
                 <Icon name="view_list" className="text-[20px]" />
               </ToggleButton>
-              <ToggleButton id="grid" isIconOnly aria-label="Mřížka">
+              <ToggleButton id="grid" isIconOnly aria-label={t("Grid", "Mřížka")}>
                 <ToggleButtonGroup.Separator />
                 <Icon name="grid_view" className="text-[20px]" />
               </ToggleButton>
@@ -722,11 +741,17 @@ export function FileBrowser() {
         <div className="-mt-1 flex flex-wrap items-center gap-2 text-sm">
           <Icon name="manage_search" className="text-[20px] text-accent" />
           <span>
-            Výsledky pro „<b>{q}</b>“ ve složce „{folderName}“ a podsložkách
-            {entries && <span className="text-muted"> · {truncated ? "prvních " : ""}{entries.length}</span>}
+            {t("Results for", "Výsledky pro")} „<b>{q}</b>“ {t("in", "ve složce")} „{folderName}“ {t("and subfolders", "a podsložkách")}
+            {entries && (
+              <span className="text-muted">
+                {" · "}
+                {truncated ? t("first ", "prvních ") : ""}
+                {entries.length}
+              </span>
+            )}
           </span>
           <Button size="sm" variant="ghost" onPress={() => Navigate(path)}>
-            Zrušit hledání
+            {t("Clear search", "Zrušit hledání")}
           </Button>
         </div>
       )}
@@ -735,15 +760,15 @@ export function FileBrowser() {
         {error ? (
           <EmptyState className="flex flex-col items-center gap-2 py-16 text-center">
             <Icon name="error" className="text-[48px] text-danger" />
-            <p className="font-medium">Složku se nepodařilo načíst</p>
+            <p className="font-medium">{t("Couldn't load the folder", "Složku se nepodařilo načíst")}</p>
             <p className="text-sm text-muted">{error}</p>
             <div className="mt-2 flex gap-2">
               {path && (
                 <Button variant="secondary" onPress={() => Navigate("")}>
-                  Na začátek
+                  {t("Back to start", "Na začátek")}
                 </Button>
               )}
-              <Button onPress={Reload}>Zkusit znovu</Button>
+              <Button onPress={Reload}>{t("Try again", "Zkusit znovu")}</Button>
             </div>
           </EmptyState>
         ) : !entries ? (
@@ -757,20 +782,20 @@ export function FileBrowser() {
             <span className="grid size-16 place-items-center rounded-full bg-accent/10">
               <Icon name={filter || q ? "search_off" : "cloud_upload"} className="text-[32px] text-accent" />
             </span>
-            <p className="font-medium">{filter || q ? "Nic nenalezeno" : "Složka je prázdná"}</p>
+            <p className="font-medium">{filter || q ? t("Nothing found", "Nic nenalezeno") : t("This folder is empty", "Složka je prázdná")}</p>
             <p className="max-w-xs text-sm text-muted">
               {q
-                ? `Ve složce „${folderName}“ ani jejích podsložkách nic neodpovídá „${q}“.`
+                ? t(`Nothing in “${folderName}” or its subfolders matches “${q}”.`, `Ve složce „${folderName}“ ani jejích podsložkách nic neodpovídá „${q}“.`)
                 : filter
-                  ? `V téhle složce nic neodpovídá „${filter}“. Enterem hledáš i v podsložkách.`
+                  ? t(`Nothing in this folder matches “${filter}”. Press Enter to search subfolders too.`, `V téhle složce nic neodpovídá „${filter}“. Enterem hledáš i v podsložkách.`)
                   : readOnly
-                    ? "Až sem vlastník něco nahraje, uvidíš to tady."
-                    : "Přetáhni sem soubory nebo složky, nebo použij tlačítko Nahrát."}
+                    ? t("When the owner uploads something, you'll see it here.", "Až sem vlastník něco nahraje, uvidíš to tady.")
+                    : t("Drag files or folders here, or use the Upload button.", "Přetáhni sem soubory nebo složky, nebo použij tlačítko Nahrát.")}
             </p>
             {!filter && !q && !readOnly && (
               <Button className="mt-2" onPress={() => fileInput.current?.click()}>
                 <Icon name="upload" className="text-[18px]" />
-                Nahrát soubory
+                {t("Upload files", "Nahrát soubory")}
               </Button>
             )}
           </EmptyState>
@@ -791,14 +816,14 @@ export function FileBrowser() {
         <div className="pointer-events-none absolute inset-0 z-20 grid place-items-center rounded-3xl border-2 border-dashed border-accent bg-accent/10 backdrop-blur-[2px]">
           <div className="flex flex-col items-center gap-2 text-accent">
             <Icon name="cloud_upload" className="text-[56px]" />
-            <p className="font-medium">Pusť soubory pro nahrání do „{folderName}“</p>
+            <p className="font-medium">{t(`Drop files to upload to “${folderName}”`, `Pusť soubory pro nahrání do „${folderName}“`)}</p>
           </div>
         </div>
       )}
 
       <ContextMenu
         position={menu}
-        actions={menu?.entry ? ActionsFor(menuTargets) : BACKGROUND_ACTIONS}
+        actions={menu?.entry ? ActionsFor(menuTargets) : backgroundActions}
         onAction={(id) => RunAction(id, menuTargets)}
         onClose={() => setMenu(null)}
       />
@@ -806,9 +831,9 @@ export function FileBrowser() {
       <NameDialog
         isOpen={dialog?.kind === "newFolder"}
         onOpenChange={(open) => !open && setDialog(null)}
-        title="Nová složka"
+        title={t("New folder", "Nová složka")}
         initial=""
-        confirmLabel="Vytvořit"
+        confirmLabel={t("Create", "Vytvořit")}
         onSubmit={async (name) => {
           const result = await ApiFetch("/api/files/folder", "POST", { path, name, all, share });
           if (!result.ok) return ErrorText(result);
@@ -820,9 +845,9 @@ export function FileBrowser() {
       <NameDialog
         isOpen={!!renameEntry}
         onOpenChange={(open) => !open && setDialog(null)}
-        title="Přejmenovat"
+        title={t("Rename", "Přejmenovat")}
         initial={renameEntry ? BaseName(renameEntry.name) : ""}
-        confirmLabel="Přejmenovat"
+        confirmLabel={t("Rename", "Přejmenovat")}
         onSubmit={async (name) => {
           if (!renameEntry || name === BaseName(renameEntry.name)) return setDialog(null), null;
           const result = await ApiFetch("/api/files/rename", "POST", { path: JoinPath(path, renameEntry.name), name, all, share });
@@ -866,14 +891,14 @@ export function FileBrowser() {
         onOpenChange={(open) => !open && setDialog(null)}
         heading={
           dialog?.kind === "delete" && dialog.names.length === 1
-            ? `Přesunout „${BaseName(dialog.names[0])}“ do koše?`
-            : `Přesunout ${dialog?.kind === "delete" ? dialog.names.length : 0} položek do koše?`
+            ? t(`Move “${BaseName(dialog.names[0])}” to trash?`, `Přesunout „${BaseName(dialog.names[0])}“ do koše?`)
+            : t(`Move ${dialog?.kind === "delete" ? dialog.names.length : 0} items to trash?`, `Přesunout ${dialog?.kind === "delete" ? dialog.names.length : 0} položek do koše?`)
         }
-        confirmLabel="Přesunout do koše"
+        confirmLabel={t("Move to trash", "Přesunout do koše")}
         isPending={pending}
         onConfirm={() => dialog?.kind === "delete" && Delete(dialog.names)}
       >
-        Z koše je můžeš 30 dní obnovit, potom se smažou natrvalo.
+        {t("You can restore them from the trash for 30 days, then they're deleted for good.", "Z koše je můžeš 30 dní obnovit, potom se smažou natrvalo.")}
       </ConfirmDialog>
 
       <PreviewModal entries={previewable} index={preview} onIndexChange={setPreview} onClose={() => setPreview(null)} urlFor={FileUrl} />

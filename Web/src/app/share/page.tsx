@@ -9,11 +9,13 @@ import { FileItems, type Sort, SortEntries } from "@/Components/Files/FileItems"
 import { PathBreadcrumbs } from "@/Components/Files/PathBreadcrumbs";
 import { PreviewModal } from "@/Components/Files/PreviewModal";
 import { Icon } from "@/Components/Icon";
+import { LanguageSwitch } from "@/Components/Language";
 import { Panel } from "@/Components/Panel";
 import { EmptyView, LoadingRows } from "@/Components/StateViews";
 import { ThemeToggle } from "@/Components/ThemeToggle";
 import { ApiFetch, ErrorText, Query } from "@/lib/api";
 import { CanPreview, type Entry, FormatBytes, FormatDate, JoinPath } from "@/lib/format";
+import { t } from "@/lib/i18n";
 
 interface ShareData {
   name: string;
@@ -48,7 +50,7 @@ function ShareView() {
 
   if (error) {
     return (
-      <EmptyView icon="link_off" title="Odkaz nefunguje">
+      <EmptyView icon="link_off" title={t("This link doesn't work", "Odkaz nefunguje")}>
         {error}
       </EmptyView>
     );
@@ -65,22 +67,22 @@ function ShareView() {
           <h1 className="text-lg font-semibold break-all">{data.name}</h1>
           <p className="text-sm text-muted">
             {FormatBytes(data.size)}
-            {data.owner && ` · sdílí ${data.owner}`}
+            {data.owner && ` · ${t("shared by", "sdílí")} ${data.owner}`}
           </p>
         </div>
         <div className="flex flex-wrap justify-center gap-2">
           {CanPreview(entry) && (
             <Button variant="secondary" onPress={() => setPreview(0)}>
               <Icon name="visibility" className="text-[18px]" />
-              Náhled
+              {t("Preview", "Náhled")}
             </Button>
           )}
           <a href={FileUrl(null, false)} download className="button button--primary">
             <Icon name="download" className="text-[18px]" />
-            Stáhnout
+            {t("Download", "Stáhnout")}
           </a>
         </div>
-        {data.expiresAt && <p className="text-xs text-muted">Odkaz platí do {FormatDate(data.expiresAt)}.</p>}
+        {data.expiresAt && <p className="text-xs text-muted">{t("Link valid until", "Odkaz platí do")} {FormatDate(data.expiresAt)}.</p>}
         <PreviewModal entries={[entry]} index={preview} onIndexChange={setPreview} onClose={() => setPreview(null)} urlFor={(_, inline) => FileUrl(null, inline)} />
       </Panel>
     );
@@ -92,13 +94,13 @@ function ShareView() {
       <div>
         <h1 className="text-2xl font-semibold">{data.name}</h1>
         <p className="text-sm text-muted">
-          {data.owner ? `Sdílí ${data.owner}` : "Sdílená složka"}
-          {data.expiresAt && ` · platí do ${FormatDate(data.expiresAt)}`}
+          {data.owner ? `${t("Shared by", "Sdílí")} ${data.owner}` : t("Shared folder", "Sdílená složka")}
+          {data.expiresAt && ` · ${t("valid until", "platí do")} ${FormatDate(data.expiresAt)}`}
         </p>
       </div>
       <PathBreadcrumbs path={path} rootLabel={data.name} onNavigate={setPath} />
       {entries.length === 0 ? (
-        <EmptyView icon="folder_open" title="Složka je prázdná" />
+        <EmptyView icon="folder_open" title={t("This folder is empty", "Složka je prázdná")} />
       ) : (
         <FileItems
           entries={entries}
@@ -122,7 +124,7 @@ function ShareView() {
             },
             onContextMenu: () => {},
             actionsFor: (entry) =>
-              entry.isDir ? [{ id: "open", label: "Otevřít", icon: "folder_open" }] : [{ id: "download", label: "Stáhnout", icon: "download" }],
+              entry.isDir ? [{ id: "open", label: t("Open", "Otevřít"), icon: "folder_open" }] : [{ id: "download", label: t("Download", "Stáhnout"), icon: "download" }],
             onAction: (entry, id) => (id === "open" ? setPath(JoinPath(path, entry.name)) : (window.location.href = FileUrl(entry, false))),
             onDropInto: () => {},
           }}
@@ -138,8 +140,9 @@ export default function SharePage() {
     <div className="mx-auto flex min-h-dvh w-full max-w-5xl flex-col gap-8 p-4 sm:p-8">
       <header className="flex items-center justify-between">
         <Brand />
-        <div className="whitespace-nowrap">
+        <div className="flex items-center gap-2 whitespace-nowrap">
           <ThemeToggle />
+          <LanguageSwitch />
         </div>
       </header>
       <main className="flex-1">

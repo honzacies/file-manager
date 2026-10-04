@@ -7,6 +7,7 @@ import { type Entry, JoinPath } from "@/lib/format";
 import { AppDialog } from "../AppDialog";
 import { Icon } from "../Icon";
 import { PathBreadcrumbs } from "./PathBreadcrumbs";
+import { Plural, t } from "@/lib/i18n";
 
 // Výběr cílové složky pro přesun — prochází se jen složky.
 export function MoveDialog({
@@ -66,15 +67,19 @@ export function MoveDialog({
     <AppDialog
       isOpen={isOpen}
       onOpenChange={onOpenChange}
-      title={`Přesunout ${moving.length === 1 ? `„${moving[0].split("/").pop()}“` : `${moving.length} položek`}`}
+      title={
+        moving.length === 1
+          ? t(`Move “${moving[0].split("/").pop()}”`, `Přesunout „${moving[0].split("/").pop()}“`)
+          : t(`Move ${moving.length} items`, `Přesunout ${moving.length} ${Plural(moving.length, ["", ""], ["položku", "položky", "položek"])}`)
+      }
       footer={
         <>
           <Button variant="tertiary" onPress={() => onOpenChange(false)}>
-            Zrušit
+            {t("Cancel", "Zrušit")}
           </Button>
           <Button onPress={Move} isPending={pending} isDisabled={isBlocked(path) || isSameFolder}>
             <Icon name="drive_file_move" className="text-[18px]" />
-            Přesunout sem
+            {t("Move here", "Přesunout sem")}
           </Button>
         </>
       }
@@ -89,7 +94,7 @@ export function MoveDialog({
               <Spinner />
             </div>
           ) : folders.length === 0 ? (
-            <p className="grid h-full place-items-center p-4 text-sm text-muted">Žádné podsložky</p>
+            <p className="grid h-full place-items-center p-4 text-sm text-muted">{t("No subfolders", "Žádné podsložky")}</p>
           ) : (
             <ul className="p-1">
               {folders.map((name) => {
@@ -113,7 +118,7 @@ export function MoveDialog({
             </ul>
           )}
         </div>
-        {isSameFolder && <p className="text-xs text-muted">Položky už v téhle složce jsou.</p>}
+        {isSameFolder && <p className="text-xs text-muted">{t("The items are already in this folder.", "Položky už v téhle složce jsou.")}</p>}
       </div>
     </AppDialog>
   );

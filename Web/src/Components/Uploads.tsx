@@ -6,6 +6,7 @@ import { Query, UploadFile } from "@/lib/api";
 import { FormatBytes } from "@/lib/format";
 import { FileIcon } from "./FileIcon";
 import { Icon } from "./Icon";
+import { Plural, t } from "@/lib/i18n";
 
 interface UploadItem {
   id: number;
@@ -102,31 +103,31 @@ export function UploadProvider({ children }: { children: ReactNode }) {
         <div
           className="fixed right-4 bottom-4 left-4 z-40 overflow-hidden rounded-2xl border border-border bg-overlay text-overlay-foreground shadow-2xl sm:left-auto sm:w-96"
           role="region"
-          aria-label="Nahrávání souborů"
+          aria-label={t("File uploads", "Nahrávání souborů")}
         >
           <div className="flex items-center gap-2 px-4 py-3">
             <Icon name={active.length ? "upload" : failed ? "error" : "check_circle"} className={active.length ? "text-accent" : failed ? "text-danger" : "text-success"} />
             <div className="min-w-0 flex-1">
               <p className="text-sm font-medium">
                 {active.length
-                  ? `Nahrávám ${items.length - active.length + 1} z ${items.length}`
+                  ? t(`Uploading ${items.length - active.length + 1} of ${items.length}`, `Nahrávám ${items.length - active.length + 1} z ${items.length}`)
                   : failed
-                    ? `Hotovo, ${failed} ${failed === 1 ? "soubor selhal" : "souborů selhalo"}`
-                    : `Nahráno ${items.length} ${items.length === 1 ? "soubor" : items.length < 5 ? "soubory" : "souborů"}`}
+                    ? t(`Done, ${failed} failed`, `Hotovo, ${failed} ${failed === 1 ? "soubor selhal" : "souborů selhalo"}`)
+                    : `${t("Uploaded", "Nahráno")} ${items.length} ${Plural(items.length, ["file", "files"], ["soubor", "soubory", "souborů"])}`}
               </p>
               <p className="text-xs text-muted tabular-nums">
-                {FormatBytes(loaded)} z {FormatBytes(total)}
+                {FormatBytes(loaded)} {t("of", "z")} {FormatBytes(total)}
               </p>
             </div>
-            <Button isIconOnly size="sm" variant="tertiary" aria-label={collapsed ? "Rozbalit" : "Sbalit"} onPress={() => setCollapsed((c) => !c)}>
+            <Button isIconOnly size="sm" variant="tertiary" aria-label={collapsed ? t("Expand", "Rozbalit") : t("Collapse", "Sbalit")} onPress={() => setCollapsed((c) => !c)}>
               <Icon name={collapsed ? "expand_less" : "expand_more"} className="text-[20px]" />
             </Button>
-            <Button isIconOnly size="sm" variant="tertiary" aria-label={active.length ? "Zrušit nahrávání" : "Zavřít"} onPress={Close}>
+            <Button isIconOnly size="sm" variant="tertiary" aria-label={active.length ? t("Cancel uploads", "Zrušit nahrávání") : t("Close", "Zavřít")} onPress={Close}>
               <Icon name="close" className="text-[20px]" />
             </Button>
           </div>
           {active.length > 0 && (
-            <ProgressBar aria-label="Celkový průběh" value={loaded} maxValue={total || 1} size="sm" className="px-4 pb-3">
+            <ProgressBar aria-label={t("Overall progress", "Celkový průběh")} value={loaded} maxValue={total || 1} size="sm" className="px-4 pb-3">
               <ProgressBar.Track>
                 <ProgressBar.Fill />
               </ProgressBar.Track>
@@ -145,7 +146,7 @@ export function UploadProvider({ children }: { children: ReactNode }) {
                       <p className="text-xs text-danger">{item.error}</p>
                     ) : (
                       <p className="text-xs text-muted tabular-nums">
-                        {item.status === "queued" ? "Čeká…" : item.status === "done" ? FormatBytes(item.size) : `${Math.round((item.loaded / (item.size || 1)) * 100)} %`}
+                        {item.status === "queued" ? t("Waiting…", "Čeká…") : item.status === "done" ? FormatBytes(item.size) : `${Math.round((item.loaded / (item.size || 1)) * 100)} %`}
                       </p>
                     )}
                   </div>

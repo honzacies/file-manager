@@ -1,3 +1,5 @@
+import { CurrentLang, t } from "./i18n";
+
 // Klientské volání API. Nikdy nehází: výpadek spojení vrátí { ok: false, status: 0 }.
 export async function ApiFetch<T = any>(
   url: string,
@@ -7,7 +9,8 @@ export async function ApiFetch<T = any>(
   try {
     const response = await fetch(url, {
       method,
-      headers: payload === undefined ? undefined : { "Content-Type": "application/json" },
+      // X-Lang = jazyk chybových hlášek z API
+      headers: { "X-Lang": CurrentLang(), ...(payload === undefined ? {} : { "Content-Type": "application/json" }) },
       body: payload === undefined ? undefined : JSON.stringify(payload),
     });
     const body = await response.json().catch(() => null);
@@ -18,8 +21,8 @@ export async function ApiFetch<T = any>(
 }
 
 export function ErrorText(result: { status: number; body: { error?: string } | null }) {
-  if (result.status === 0) return "Server neodpovídá. Zkontroluj připojení.";
-  return result.body?.error ?? "Něco se pokazilo.";
+  if (result.status === 0) return t("The server isn't responding. Check your connection.", "Server neodpovídá. Zkontroluj připojení.");
+  return result.body?.error ?? t("Something went wrong.", "Něco se pokazilo.");
 }
 
 export function Query(params: Record<string, string | number | boolean | undefined>) {
@@ -48,12 +51,13 @@ export function UploadFile(
       try {
         error = JSON.parse(xhr.responseText).error;
       } catch {}
-      resolve(xhr.status < 300 ? { ok: true } : { ok: false, error: error ?? "Nahrání se nepovedlo." });
+      resolve(xhr.status < 300 ? { ok: true } : { ok: false, error: error ?? t("Upload failed.", "Nahrání se nepovedlo.") });
     };
-    xhr.onerror = () => resolve({ ok: false, error: "Spojení se serverem se přerušilo." });
-    xhr.onabort = () => resolve({ ok: false, error: "Zrušeno." });
+    xhr.onerror = () => resolve({ ok: false, error: t("The connection to the server was lost.", "Spojení se serverem se přerušilo.") });
+    xhr.onabort = () => resolve({ ok: false, error: t("Cancelled.", "Zrušeno.") });
     signal.addEventListener("abort", () => xhr.abort());
     xhr.open("POST", url);
+    xhr.setRequestHeader("X-Lang", CurrentLang());
     xhr.send(form);
   });
 }

@@ -5,6 +5,7 @@ import { RequireUser } from "../Auth.ts";
 import { Db } from "../Db.ts";
 import { AllPeople, PersonById } from "../People.ts";
 import { GetRootDir, GetView, HttpError, Resolve, StatOrThrow } from "../Storage.ts";
+import { T } from "../Lang.ts";
 
 interface UserShareRow {
   id: number;
@@ -19,7 +20,7 @@ interface UserShareRow {
 // Sdílení, které request.user vlastní — jinak 404 (cizí sdílení nesmí prozradit, že existuje).
 function OwnShare(id: number, userId: number) {
   const row = Db.prepare("SELECT * FROM user_shares WHERE id = ? AND owner_id = ?").get(id, userId) as UserShareRow | undefined;
-  if (!row) throw new HttpError(404, "Sdílení neexistuje.");
+  if (!row) throw new HttpError(404, T("Share not found.", "Sdílení neexistuje."));
   return row;
 }
 
@@ -30,6 +31,13 @@ function DisplayPath(fullPath: string, username: string) {
 
 const AbsPath = (relToRoot: string) => path.join(GetRootDir(), ...relToRoot.split("/"));
 const Exists = (relToRoot: string) => existsSync(AbsPath(relToRoot));
+
+// Starší notifikace jsou jen česky (prostý text), nové JSON s oběma jazyky.
+function NotificationText(text: string) {
+  if (!text.startsWith("{")) return text;
+  const both = JSON.parse(text) as { en: string; cs: string };
+  return T(both.en, both.cs);
+}
 
 export async function UserShareRoutes(app: FastifyInstance) {
   app.addHook("preHandler", RequireUser);
@@ -80,7 +88,7 @@ export async function UserShareRoutes(app: FastifyInstance) {
       const body = request.body as { path: string; all: boolean; recipientIds: number[]; canWrite: boolean };
       // Sdílet jde jen z vlastních souborů (nebo adminovi z "Všech souborů") — ne dál přeposílat cizí sdílení.
       const { abs, rel, relToRoot } = Resolve(GetView(request.user, { all: body.all }), body.path);
-      if (!rel) throw new HttpError(400, "Celou domovskou složku sdílet nejde, vyber konkrétní položku.");
+      if (!rel) throw new HttpError(400, T("You can't share your whole home folder. Pick a specific item.", "Celou domovskou složku sdílet nejde, vyber konkrétní položku."));
       const isDir = (await StatOrThrow(abs)).isDirectory();
       const name = path.posix.basename(relToRoot);
 
@@ -94,11 +102,17 @@ export async function UserShareRoutes(app: FastifyInstance) {
       let added = 0;
       for (const recipientId of new Set(body.recipientIds)) {
         if (recipientId === request.user.id) continue;
-        if (!Db.prepare("SELECT 1 FROM users WHERE id = ?").get(recipientId)) throw new HttpError(400, "Takový uživatel neexistuje.");
+        if (!Db.prepare("SELECT 1 FROM users WHERE id = ?").get(recipientId)) throw new HttpError(400, T("No such user.", "Takový uživatel neexistuje."));
         const row = insert.get(request.user.id, recipientId, relToRoot, isDir ? 1 : 0, body.canWrite ? 1 : 0, now, now) as { id: number; is_new: number };
         // Notifikace jen při novém sdílení, ne při změně oprávnění.
         if (row.is_new) {
-          notify.run(recipientId, `${PersonById(request.user.id)?.name} s tebou sdílí ${isDir ? "složku" : "soubor"} „${name}“`, row.id, now);
+          // Text v obou jazycích — jazyk příjemce se pozná až při čtení.
+          const who = PersonById(request.user.id)?.name;
+          const text = JSON.stringify({
+            en: `${who} shared the ${isDir ? "folder" : "file"} “${name}” with you`,
+            cs: `${who} s tebou sdílí ${isDir ? "složku" : "soubor"} „${name}“`,
+          });
+          notify.run(recipientId, text, row.id, now);
           added++;
         }
       }
@@ -120,7 +134,7 @@ export async function UserShareRoutes(app: FastifyInstance) {
   app.delete("/user-shares/:id", async (request) => {
     const id = Number((request.params as { id: string }).id);
     const result = Db.prepare("DELETE FROM user_shares WHERE id = ? AND (owner_id = ? OR recipient_id = ?)").run(id, request.user.id, request.user.id);
-    if (!result.changes) throw new HttpError(404, "Sdílení neexistuje.");
+    if (!result.changes) throw new HttpError(404, T("Share not found.", "Sdílení neexistuje."));
     return { ok: true };
   });
 
@@ -168,7 +182,7 @@ export async function UserShareRoutes(app: FastifyInstance) {
       WHERE n.user_id = ? ORDER BY n.created_at DESC LIMIT 30
     `)
       .all(request.user.id)
-      .map((row) => ({ ...row, isDir: row.isDir === null ? null : row.isDir === 1 }));
+      .map((row) => ({ ...row, text: NotificationText(row.text as string), isDir: row.isDir === null ? null : row.isDir === 1 }));
     const { unread } = Db.prepare("SELECT COUNT(*) AS unread FROM notifications WHERE user_id = ? AND read_at IS NULL").get(request.user.id) as {
       unread: number;
     };

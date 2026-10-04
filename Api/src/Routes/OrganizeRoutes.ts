@@ -23,6 +23,7 @@ import {
   UPLOAD_PREFIX,
   ViewFor,
 } from "../Storage.ts";
+import { T } from "../Lang.ts";
 
 const PathsBody = (extra: Record<string, unknown> = {}, required: string[] = []) =>
   ({
@@ -54,14 +55,14 @@ function ScopeFor(user: SessionUser, rel: string, shareId: number | null) {
     `).get(shareId, user.id) as { path: string; owner: string } | undefined;
     if (!share || (rel !== share.path && !rel.startsWith(`${share.path}/`))) return null;
     const inner = rel.slice(share.path.length + 1);
-    return { path: inner, share: shareId, location: [`Sdílí ${share.owner}`, path.posix.basename(share.path), path.posix.dirname(inner)].filter((p) => p && p !== ".").join(" / ") };
+    return { path: inner, share: shareId, location: [T(`Shared by ${share.owner}`, `Sdílí ${share.owner}`), path.posix.basename(share.path), path.posix.dirname(inner)].filter((p) => p && p !== ".").join(" / ") };
   }
   if (rel.startsWith(`${user.username}/`)) {
     const inner = rel.slice(user.username.length + 1);
     const parent = path.posix.dirname(inner);
-    return { path: inner, location: parent === "." ? "Moje soubory" : `Moje soubory / ${parent.replaceAll("/", " / ")}` };
+    return { path: inner, location: [T("My files", "Moje soubory"), ...(parent === "." ? [] : parent.split("/"))].join(" / ") };
   }
-  if (user.role === "admin") return { path: rel, all: true, location: `Všechny soubory / ${path.posix.dirname(rel).replaceAll("/", " / ")}` };
+  if (user.role === "admin") return { path: rel, all: true, location: `${T("All files", "Všechny soubory")} / ${path.posix.dirname(rel).replaceAll("/", " / ")}` };
   return null;
 }
 
@@ -134,7 +135,7 @@ export async function OrganizeRoutes(app: FastifyInstance) {
     const names: string[] = [];
     for (const clientPath of body.paths) {
       const { abs, rel } = Resolve(view, clientPath);
-      if (!rel) throw new HttpError(400, "Kořenovou složku nejde zkopírovat.");
+      if (!rel) throw new HttpError(400, T("The root folder can't be copied.", "Kořenovou složku nejde zkopírovat."));
       const stat = await StatOrThrow(abs);
       await AssertQuota(view, stat.isDirectory() ? await DirSize(abs) : stat.size);
       // "foto.jpg" -> "foto (kopie).jpg"
@@ -208,7 +209,7 @@ export async function OrganizeRoutes(app: FastifyInstance) {
       const query = request.query as ScopeT & { path: string; q: string };
       const view = ViewFor(request, query);
       const { abs, relToRoot } = Resolve(view, query.path);
-      if (!(await StatOrThrow(abs)).isDirectory()) throw new HttpError(400, "Tohle není složka.");
+      if (!(await StatOrThrow(abs)).isDirectory()) throw new HttpError(400, T("This is not a folder.", "Tohle není složka."));
       const needle = Normalize(query.q.trim());
       const LIMIT = 300;
       const results: Entry[] = [];
@@ -262,8 +263,8 @@ export async function OrganizeRoutes(app: FastifyInstance) {
       AssertWritable(view);
       for (const clientPath of body.paths) {
         const { abs, rel, relToRoot } = Resolve(view, clientPath);
-        if (!rel) throw new HttpError(400, "Kořenové složce barvu nastavit nejde.");
-        if (!(await StatOrThrow(abs)).isDirectory()) throw new HttpError(400, "Barvu jde nastavit jen složce.");
+        if (!rel) throw new HttpError(400, T("The root folder can't have a color.", "Kořenové složce barvu nastavit nejde."));
+        if (!(await StatOrThrow(abs)).isDirectory()) throw new HttpError(400, T("Only folders can have a color.", "Barvu jde nastavit jen složce."));
         if (body.color) {
           Db.prepare("INSERT INTO folder_colors (path, color) VALUES (?, ?) ON CONFLICT (path) DO UPDATE SET color = excluded.color").run(
             relToRoot,

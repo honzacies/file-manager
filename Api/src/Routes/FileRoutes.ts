@@ -32,6 +32,7 @@ import {
   ValidName,
   ViewFor,
 } from "../Storage.ts";
+import { T } from "../Lang.ts";
 
 const PathQuery = {
   type: "object",
@@ -69,7 +70,7 @@ export async function FileRoutes(app: FastifyInstance) {
     const query = request.query as PathQueryT;
     const view = ViewFor(request, query);
     const { abs, rel, relToRoot } = Resolve(view, query.path);
-    if (!(await StatOrThrow(abs)).isDirectory()) throw new HttpError(400, "Tohle není složka.");
+    if (!(await StatOrThrow(abs)).isDirectory()) throw new HttpError(400, T("This is not a folder.", "Tohle není složka."));
     const entries = await ListDir(abs, abs === view.root, relToRoot, request.user.id);
     return { path: rel, readOnly: view.readOnly, entries, people: PeopleByUsername(entries.map((entry) => entry.owner ?? "")) };
   });
@@ -90,7 +91,7 @@ export async function FileRoutes(app: FastifyInstance) {
     const query = request.query as PathQueryT;
     const { abs } = Resolve(ViewFor(request, query), query.path);
     const thumb = await GetThumb(abs);
-    if (!thumb) throw new HttpError(404, "Náhled není k dispozici.");
+    if (!thumb) throw new HttpError(404, T("Preview not available.", "Náhled není k dispozici."));
     return SendThumb(reply, thumb);
   });
 
@@ -123,9 +124,9 @@ export async function FileRoutes(app: FastifyInstance) {
       AssertWritable(view);
       const { abs } = Resolve(view, body.path);
       const name = ValidName(body.name);
-      if (abs === view.root && name === TRASH_DIR) throw new HttpError(400, "Tenhle název je vyhrazený.");
+      if (abs === view.root && name === TRASH_DIR) throw new HttpError(400, T("This name is reserved.", "Tenhle název je vyhrazený."));
       await fs.mkdir(path.join(abs, name)).catch((error: NodeJS.ErrnoException) => {
-        throw error.code === "EEXIST" ? new HttpError(409, "Položka s tímhle názvem už existuje.") : error;
+        throw error.code === "EEXIST" ? new HttpError(409, T("An item with this name already exists.", "Položka s tímhle názvem už existuje.")) : error;
       });
       return { name };
     },
@@ -141,10 +142,10 @@ export async function FileRoutes(app: FastifyInstance) {
     // Předběžná kontrola podle velikosti requestu — ať se velký soubor vůbec nezačne zapisovat.
     await AssertQuota(view, Number(request.headers["content-length"] ?? 0));
     const file = await request.file();
-    if (!file) throw new HttpError(400, "Chybí soubor.");
+    if (!file) throw new HttpError(400, T("No file was sent.", "Chybí soubor."));
 
     const parts = (query.relative || file.filename).split("/").map(ValidName);
-    if (abs === view.root && parts[0] === TRASH_DIR) throw new HttpError(400, "Tenhle název je vyhrazený.");
+    if (abs === view.root && parts[0] === TRASH_DIR) throw new HttpError(400, T("This name is reserved.", "Tenhle název je vyhrazený."));
     const targetDir = path.join(abs, ...parts.slice(0, -1));
     await fs.mkdir(targetDir, { recursive: true });
 
@@ -182,14 +183,14 @@ export async function FileRoutes(app: FastifyInstance) {
       const view = ViewFor(request, body);
       AssertWritable(view);
       const { abs, rel, relToRoot } = Resolve(view, body.path);
-      if (!rel) throw new HttpError(400, "Kořenovou složku nejde přejmenovat.");
+      if (!rel) throw new HttpError(400, T("The root folder can't be renamed.", "Kořenovou složku nejde přejmenovat."));
       const source = await StatOrThrow(abs);
       const name = ValidName(body.name);
       const target = path.join(path.dirname(abs), name);
-      if (path.dirname(abs) === view.root && name === TRASH_DIR) throw new HttpError(400, "Tenhle název je vyhrazený.");
+      if (path.dirname(abs) === view.root && name === TRASH_DIR) throw new HttpError(400, T("This name is reserved.", "Tenhle název je vyhrazený."));
       // rename by existující cíl tiše přepsal. Stejný inode = jen jiná velikost písmen na FS bez rozlišení.
       const existing = await fs.stat(target).catch(() => null);
-      if (existing && existing.ino !== source.ino) throw new HttpError(409, "Položka s tímhle názvem už existuje.");
+      if (existing && existing.ino !== source.ino) throw new HttpError(409, T("An item with this name already exists.", "Položka s tímhle názvem už existuje."));
       await fs.rename(abs, target);
       RewritePaths(relToRoot, RelToRoot(view, target));
       return { name };
@@ -201,13 +202,13 @@ export async function FileRoutes(app: FastifyInstance) {
     const view = ViewFor(request, body);
     AssertWritable(view);
     const destination = Resolve(view, body.destination ?? "").abs;
-    if (!(await StatOrThrow(destination)).isDirectory()) throw new HttpError(400, "Cíl není složka.");
+    if (!(await StatOrThrow(destination)).isDirectory()) throw new HttpError(400, T("The destination is not a folder.", "Cíl není složka."));
 
     for (const clientPath of body.paths) {
       const { abs, rel, relToRoot } = Resolve(view, clientPath);
-      if (!rel) throw new HttpError(400, "Kořenovou složku nejde přesunout.");
+      if (!rel) throw new HttpError(400, T("The root folder can't be moved.", "Kořenovou složku nejde přesunout."));
       if (destination === abs || destination.startsWith(abs + path.sep)) {
-        throw new HttpError(400, "Složku nejde přesunout sama do sebe.");
+        throw new HttpError(400, T("A folder can't be moved into itself.", "Složku nejde přesunout sama do sebe."));
       }
       if (path.dirname(abs) === destination) continue;
       await StatOrThrow(abs);
@@ -225,7 +226,7 @@ export async function FileRoutes(app: FastifyInstance) {
     AssertWritable(view);
     for (const clientPath of body.paths) {
       const { abs, rel, relToRoot } = Resolve(view, clientPath);
-      if (!rel) throw new HttpError(400, "Kořenovou složku nejde smazat.");
+      if (!rel) throw new HttpError(400, T("The root folder can't be deleted.", "Kořenovou složku nejde smazat."));
       await MoveToTrash(abs, relToRoot);
     }
     return { ok: true };

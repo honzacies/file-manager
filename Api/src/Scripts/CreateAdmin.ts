@@ -14,21 +14,21 @@ const Fail = (message: string) => {
 
 const username = process.argv[2]?.trim();
 if (!username || !/^[A-Za-z0-9_-][A-Za-z0-9_.-]{1,31}$/.test(username)) {
-  Fail("Použití: create-admin <username> (2–32 znaků: písmena, číslice, _ . -)");
+  Fail("Usage: create-admin <username> (2–32 characters: letters, digits, _ . -)");
 }
 
 const lines = createInterface({ input: process.stdin, output: process.stdin.isTTY ? process.stdout : undefined, terminal: false });
-const password = (await lines.question(process.stdin.isTTY ? "Heslo: " : "")).trim();
+const password = (await lines.question(process.stdin.isTTY ? "Password: " : "")).trim();
 lines.close();
-if (password.length < 8) Fail("Heslo musí mít aspoň 8 znaků.");
+if (password.length < 8) Fail("The password must be at least 8 characters long.");
 
 const hash = await HashPassword(password);
 const existing = Db.prepare("SELECT id FROM users WHERE username = ?").get(username);
 if (existing) {
   Db.prepare("UPDATE users SET password_hash = ?, role = 'admin' WHERE username = ?").run(hash, username);
-  console.log(`\x1b[1;32m✓\x1b[0m Účet ${username} je admin a má nové heslo.`);
+  console.log(`\x1b[1;32m✓\x1b[0m Account ${username} is now an admin with a new password.`);
 } else {
   Db.prepare("INSERT INTO users (username, password_hash, role, created_at) VALUES (?, ?, 'admin', ?)").run(username, hash, Date.now());
   mkdirSync(path.join(GetRootDir(), username as string), { recursive: true });
-  console.log(`\x1b[1;32m✓\x1b[0m Admin ${username} založen.`);
+  console.log(`\x1b[1;32m✓\x1b[0m Admin ${username} created.`);
 }

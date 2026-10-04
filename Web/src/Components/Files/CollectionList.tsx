@@ -12,6 +12,7 @@ import { type Person, PersonLabel } from "../UserAvatar";
 import { MoreButton } from "./ActionMenu";
 import { PreviewModal } from "./PreviewModal";
 import { ClickableRow, ListPanel } from "../ListPanel";
+import { t } from "@/lib/i18n";
 
 // Položka z /api/recent nebo /api/starred — nese rozsah, ve kterém se otevírá.
 export interface CollectionItem extends Entry {
@@ -66,7 +67,7 @@ export function CollectionList({
   async function ToggleStar(item: CollectionItem) {
     const result = await ApiFetch("/api/files/star", "POST", { paths: [item.path], share: item.share, all: item.all, starred: !item.starred });
     if (!result.ok) return toast.danger(ErrorText(result));
-    toast.success(item.starred ? "Odebráno z S hvězdičkou" : "Přidáno do S hvězdičkou");
+    toast.success(item.starred ? t("Removed from Starred", "Odebráno z S hvězdičkou") : t("Added to Starred", "Přidáno do S hvězdičkou"));
     Load();
   }
 
@@ -111,12 +112,12 @@ export function CollectionList({
                 </span>
                 <PersonLabel person={item.owner ? people[item.owner] : null} className="hidden w-40 text-sm md:flex" />
                 <MoreButton
-                  label={`Akce pro ${item.name}`}
+                  label={`${t("Actions for", "Akce pro")} ${item.name}`}
                   actions={[
-                    { id: "open", label: item.isDir ? "Otevřít" : CanPreview(item) ? "Náhled" : "Otevřít", icon: item.isDir ? "folder_open" : "visibility" },
-                    { id: "download", label: item.isDir ? "Stáhnout jako ZIP" : "Stáhnout", icon: item.isDir ? "folder_zip" : "download" },
-                    { id: "reveal", label: "Zobrazit ve složce", icon: "drive_file_move", separated: true },
-                    { id: "star", label: item.starred ? "Odebrat hvězdičku" : "Označit hvězdičkou", icon: item.starred ? "star_half" : "star" },
+                    { id: "open", label: item.isDir ? t("Open", "Otevřít") : CanPreview(item) ? t("Preview", "Náhled") : t("Open", "Otevřít"), icon: item.isDir ? "folder_open" : "visibility" },
+                    { id: "download", label: item.isDir ? t("Download as ZIP", "Stáhnout jako ZIP") : t("Download", "Stáhnout"), icon: item.isDir ? "folder_zip" : "download" },
+                    { id: "reveal", label: t("Show in folder", "Zobrazit ve složce"), icon: "drive_file_move", separated: true },
+                    { id: "star", label: item.starred ? t("Remove star", "Odebrat hvězdičku") : t("Add star", "Označit hvězdičkou"), icon: item.starred ? "star_half" : "star" },
                   ]}
                   onAction={(id) => Run(item, id)}
                 />

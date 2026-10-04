@@ -2,6 +2,7 @@
 
 import { AlertDialog, Button } from "@heroui/react";
 import type { ReactNode } from "react";
+import { t } from "@/lib/i18n";
 
 // Jedno potvrzení pro všechny nevratné akce. Řízené a bez kořene <AlertDialog>
 // (ten bez tlačítka uvnitř hlásí PressResponder varování). Potvrzovací tlačítko
@@ -11,7 +12,7 @@ export function ConfirmDialog({
   onOpenChange,
   heading,
   children,
-  confirmLabel = "Potvrdit",
+  confirmLabel,
   status = "danger",
   isPending,
   onConfirm,
@@ -36,10 +37,10 @@ export function ConfirmDialog({
           <AlertDialog.Body className="text-sm text-muted">{children}</AlertDialog.Body>
           <AlertDialog.Footer className="flex flex-col-reverse items-stretch! gap-2 sm:flex-row sm:justify-end">
             <Button slot="close" variant="tertiary" isDisabled={isPending}>
-              Zrušit
+              {t("Cancel", "Zrušit")}
             </Button>
             <Button variant={status === "danger" ? "danger" : "primary"} onPress={onConfirm} isPending={isPending}>
-              {confirmLabel}
+              {confirmLabel ?? t("Confirm", "Potvrdit")}
             </Button>
           </AlertDialog.Footer>
         </AlertDialog.Dialog>
