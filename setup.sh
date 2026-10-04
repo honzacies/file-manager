@@ -149,4 +149,4 @@ else
 fi
 printf '\n  %sFiles:%s       %s\n' "$C_BOLD" "$C_RESET" "$CLOUD_DIR"
 printf '  %sLogs:%s        docker compose logs -f cloud\n' "$C_BOLD" "$C_RESET"
-printf '  %sUpdate:%s      git pull && sudo ./setup.sh\n\n' "$C_BOLD" "$C_RESET"
+printf '  %sUpdate:%s      sudo ./update.sh\n\n' "$C_BOLD" "$C_RESET"

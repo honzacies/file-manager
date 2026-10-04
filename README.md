@@ -85,10 +85,10 @@ Pak sestaví a spustí kontejner a vypíše adresu, třeba `http://192.168.1.10:
 ### Aktualizace
 
 ```bash
-cd /opt/cloud && sudo git pull && sudo ./setup.sh
+cd /opt/cloud && sudo ./update.sh
 ```
 
-Skript si pamatuje předchozí odpovědi (Enter = beze změny) a data zůstanou, kde byla.
+Stáhne nejnovější verzi z GitHubu a přestaví kontejner, na nic se neptá. Nastavení i data zůstanou, kde byla. Když nic nového není, nic nedělá (`--force` přestaví i tak).
 
 ### Přístup zvenku (doporučeno: Tailscale)
 
