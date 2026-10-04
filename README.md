@@ -1,6 +1,8 @@
 <div align="center">
 
-# ☁️ Cloud
+<img src="Web/public/icons/icon-192.png" alt="" width="88">
+
+# Cloud
 
 **Your own Google Drive. On your server, on your disks, with no subscription.**
 

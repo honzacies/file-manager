@@ -1,6 +1,8 @@
 <div align="center">
 
-# ☁️ Cloud
+<img src="Web/public/icons/icon-192.png" alt="" width="88">
+
+# Cloud
 
 **Tvůj vlastní Google Drive. Na tvém serveru, s tvými disky, bez předplatného.**
 
