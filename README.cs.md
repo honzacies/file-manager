@@ -32,7 +32,8 @@ Jeden Docker kontejner, jeden příkaz na instalaci.
 - **Tvoje data zůstávají doma.** Žádná cizí firma, žádné limity tarifu, žádné skenování fotek.
 - **Soubory jsou obyčejné soubory.** Leží na disku jako `<složka>/<uživatel>/…` — žádný proprietární formát. Kdykoli je zkopíruješ, zazálohuješ nebo otevřeš bez aplikace.
 - **Vypadá a ovládá se jako služby, na které jsi zvyklý.** Kontextové menu jako v Google Drive, náhledy, přetahování, sdílení.
-- **Instalace za pár minut.** `sudo ./setup.sh` se na všechno zeptá a zbytek udělá sám, aktualizace je jeden příkaz.
+- **Instalace za pár minut.** `sudo ./setup.sh` se na všechno zeptá a zbytek udělá sám.
+- **Aktualizace jedním příkazem.** `sudo ./update.sh` stáhne nejnovější verzi, přestaví a znovu spustí cloud sám. Žádné otázky, žádné nastavování, soubory i nastavení zůstanou, a když není nic nového, je hotovo okamžitě.
 
 ## ✨ Funkce
 
@@ -126,7 +127,7 @@ Skript se zeptá na:
 
 Pak sestaví a spustí kontejner a vypíše adresu, třeba `http://192.168.1.10:8080`. Hotovo — přihlas se a v *Administrace → Uživatelé* založ účty pro ostatní.
 
-### Aktualizace
+### Aktualizace ⚡
 
 ```bash
 cd /opt/cloud && sudo ./update.sh

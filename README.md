@@ -32,7 +32,8 @@ One Docker container, one command to install.
 - **Your data stays at home.** No third-party company, no plan limits, nobody scanning your photos.
 - **Files are just files.** They live on disk as `<folder>/<user>/…`, in no proprietary format. Copy them, back them up or open them without the app, any time.
 - **It looks and works like the services you already know.** A Google Drive–style context menu, previews, drag and drop, sharing.
-- **Installed in minutes.** `sudo ./setup.sh` asks a few questions and does the rest; updating is a single command.
+- **Installed in minutes.** `sudo ./setup.sh` asks a few questions and does the rest.
+- **Updates in one command.** `sudo ./update.sh` pulls the latest version, rebuilds and restarts the cloud on its own. No questions, no config to touch, your files and settings stay put, and if nothing changed it's done instantly.
 
 ## ✨ Features
 
@@ -126,7 +127,7 @@ The script asks for:
 
 Then it builds and starts the container and prints the address, e.g. `http://192.168.1.10:8080`. That's it: sign in and create accounts for everyone else under *Administration → Users*.
 
-### Updating
+### Updating ⚡
 
 ```bash
 cd /opt/cloud && sudo ./update.sh
