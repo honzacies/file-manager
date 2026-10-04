@@ -5,6 +5,7 @@ import { useCallback, useEffect, useState } from "react";
 import { AdminOnly } from "@/Components/AdminOnly";
 import { AppDialog } from "@/Components/AppDialog";
 import { Icon } from "@/Components/Icon";
+import { LanguageSelect } from "@/Components/Language";
 import { PageHeader } from "@/Components/PageHeader";
 import { Panel } from "@/Components/Panel";
 import { ErrorView, LoadingRows } from "@/Components/StateViews";
@@ -15,6 +16,7 @@ import { t } from "@/lib/i18n";
 interface Settings {
   rootDir: string;
   defaultRootDir: string;
+  defaultLang: "en" | "cs";
   disk: { total: number; free: number } | null;
 }
 
@@ -123,6 +125,13 @@ export default function SettingsPage() {
     Load();
   }
 
+  async function SaveLang(value: string) {
+    const result = await ApiFetch("/api/admin/settings/lang", "PUT", { defaultLang: value });
+    if (!result.ok) return toast.danger(ErrorText(result));
+    toast.success(t("Default language saved", "Výchozí jazyk uložen"));
+    Load();
+  }
+
   const used = settings?.disk ? settings.disk.total - settings.disk.free : 0;
   const changed = settings && rootDir.trim() !== settings.rootDir;
 
@@ -177,6 +186,17 @@ export default function SettingsPage() {
                   )}
                 </div>
               </Form>
+            </Panel>
+
+            <Panel>
+              <h2 className="mb-1 font-semibold">{t("Default language", "Výchozí jazyk")}</h2>
+              <p className="mb-5 text-sm text-muted">
+                {t(
+                  "Used when a browser prefers neither English nor Czech. Users can still pick their own language in Account.",
+                  "Použije se, když prohlížeč nechce češtinu ani angličtinu. Každý si jazyk může změnit v Účtu.",
+                )}
+              </p>
+              <LanguageSelect label={t("Default language", "Výchozí jazyk")} value={settings.defaultLang} onChange={SaveLang} />
             </Panel>
 
             {settings.disk && (

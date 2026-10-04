@@ -8,7 +8,6 @@ import { ApiFetch } from "@/lib/api";
 import { FormatBytes } from "@/lib/format";
 import { Brand } from "./Brand";
 import { Icon } from "./Icon";
-import { LanguageSwitch } from "./Language";
 import { NotificationBell } from "./Notifications";
 import { ForgetUser, useUser } from "./Session";
 import { ClearOffline } from "@/lib/offline";
@@ -137,10 +136,7 @@ function SidebarBody({ onNavigate }: { onNavigate?: () => void }) {
       <div className="mt-auto flex flex-col gap-3">
         <StorageMeter />
         <Separator />
-        <div className="flex items-center justify-between gap-2 pr-3">
-          <ThemeToggle />
-          <LanguageSwitch />
-        </div>
+        <ThemeToggle />
         <div className="flex items-center gap-1">
           <Link
             href="/account/"

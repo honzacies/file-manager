@@ -33,6 +33,17 @@ export async function ProfileRoutes(app: FastifyInstance) {
     },
   );
 
+  // null = automaticky
+  app.put(
+    "/account/lang",
+    { schema: { body: { type: "object", required: ["lang"], properties: { lang: { type: ["string", "null"], enum: ["en", "cs", null] } } } } },
+    async (request) => {
+      const { lang } = request.body as { lang: "en" | "cs" | null };
+      Db.prepare("UPDATE users SET lang = ? WHERE id = ?").run(lang, request.user.id);
+      return { lang };
+    },
+  );
+
   app.post("/account/avatar", async (request) => {
     const file = await request.file({ limits: { fileSize: AVATAR_MAX_BYTES } });
     if (!file) throw new HttpError(400, T("No image was sent.", "Chybí obrázek."));

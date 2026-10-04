@@ -9,7 +9,6 @@ import { FileItems, type Sort, SortEntries } from "@/Components/Files/FileItems"
 import { PathBreadcrumbs } from "@/Components/Files/PathBreadcrumbs";
 import { PreviewModal } from "@/Components/Files/PreviewModal";
 import { Icon } from "@/Components/Icon";
-import { LanguageSwitch } from "@/Components/Language";
 import { Panel } from "@/Components/Panel";
 import { EmptyView, LoadingRows } from "@/Components/StateViews";
 import { ThemeToggle } from "@/Components/ThemeToggle";
@@ -140,9 +139,8 @@ export default function SharePage() {
     <div className="mx-auto flex min-h-dvh w-full max-w-5xl flex-col gap-8 p-4 sm:p-8">
       <header className="flex items-center justify-between">
         <Brand />
-        <div className="flex items-center gap-2 whitespace-nowrap">
+        <div className="whitespace-nowrap">
           <ThemeToggle />
-          <LanguageSwitch />
         </div>
       </header>
       <main className="flex-1">

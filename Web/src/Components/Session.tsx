@@ -4,11 +4,15 @@ import { Spinner } from "@heroui/react";
 import { usePathname, useRouter } from "next/navigation";
 import { createContext, type ReactNode, use, useEffect, useState } from "react";
 import { ApiFetch } from "@/lib/api";
+import { type Lang, SavePreference } from "@/lib/i18n";
 import { ClearOffline } from "@/lib/offline";
+import { useLanguage } from "./Language";
 import type { Person } from "./UserAvatar";
 
 export interface User extends Person {
   role: "admin" | "user";
+  // jazyk zvolený v Účtu, null = automaticky
+  lang?: Lang | null;
 }
 
 const SessionContext = createContext<User | null>(null);
@@ -23,6 +27,8 @@ export function ForgetUser() {
   try {
     localStorage.removeItem(USER_KEY);
   } catch {}
+  // Jazyk po odhlášení zase podle prohlížeče, ne podle posledního uživatele.
+  SavePreference(null);
 }
 
 // Přihlášený uživatel. Mimo SessionGate se nepoužívá, takže je vždy definovaný.
@@ -36,6 +42,7 @@ export function SessionGate({ children }: { children: ReactNode }) {
   const router = useRouter();
   const pathname = usePathname();
   const [user, setUser] = useState<User | null>(null);
+  const { setPreference } = useLanguage();
 
   useEffect(() => {
     ApiFetch<User>("/api/auth/me").then((result) => {
@@ -46,6 +53,7 @@ export function SessionGate({ children }: { children: ReactNode }) {
           if (previous && previous.id !== result.body.id) ClearOffline();
           localStorage.setItem(USER_KEY, JSON.stringify(result.body));
         } catch {}
+        setPreference(result.body.lang ?? null);
         return setUser(result.body);
       }
       // status 0 = server nedostupný (offline), ne odhlášení

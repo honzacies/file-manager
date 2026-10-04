@@ -4,7 +4,6 @@ import { Button, FieldError, Form, Input, Label, TextField } from "@heroui/react
 import { useRouter, useSearchParams } from "next/navigation";
 import { Suspense, useState } from "react";
 import { Brand } from "@/Components/Brand";
-import { LanguageSwitch } from "@/Components/Language";
 import { Panel } from "@/Components/Panel";
 import { ApiFetch, ErrorText } from "@/lib/api";
 import { SafeRedirect } from "@/lib/safeRedirect";
@@ -60,10 +59,7 @@ export default function LoginPage() {
         <Suspense>
           <LoginForm />
         </Suspense>
-        <div className="mt-6 flex items-center justify-between gap-3">
-          <p className="text-xs text-muted">{t("Your administrator creates your account.", "Účet ti založí administrátor.")}</p>
-          <LanguageSwitch />
-        </div>
+        <p className="mt-6 text-xs text-muted">{t("Your administrator creates your account.", "Účet ti založí administrátor.")}</p>
       </Panel>
     </div>
   );

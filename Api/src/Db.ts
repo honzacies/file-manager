@@ -103,6 +103,8 @@ for (const [column, type] of [
   ["first_name", "TEXT"],
   ["last_name", "TEXT"],
   ["avatar_version", "INTEGER"],
+  // jazyk appky zvolený uživatelem; NULL = automaticky (prohlížeč, jinak výchozí od admina)
+  ["lang", "TEXT"],
 ]) {
   if (!userColumns.has(column)) Db.exec(`ALTER TABLE users ADD COLUMN ${column} ${type}`);
 }

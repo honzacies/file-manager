@@ -3,7 +3,7 @@ import fs from "node:fs/promises";
 import path from "node:path";
 import type { FastifyInstance } from "fastify";
 import { HashPassword, RequireAdmin, RequireOwnPassword, RequireUser } from "../Auth.ts";
-import { Db, SetSetting } from "../Db.ts";
+import { Db, GetSetting, SetSetting } from "../Db.ts";
 import { Env } from "../Env.ts";
 import { PersonById } from "../People.ts";
 import { DirSize, GetRootDir, HttpError } from "../Storage.ts";
@@ -123,6 +123,7 @@ export async function AdminRoutes(app: FastifyInstance) {
     return {
       rootDir,
       defaultRootDir: Env.DefaultRootDir,
+      defaultLang: GetSetting("default_lang") ?? "en",
       disk: stats ? { total: stats.blocks * stats.bsize, free: stats.bavail * stats.bsize } : null,
     };
   });
@@ -146,6 +147,16 @@ export async function AdminRoutes(app: FastifyInstance) {
       });
       SetSetting("root_dir", resolved);
       return { rootDir: resolved };
+    },
+  );
+
+  app.put(
+    "/admin/settings/lang",
+    { schema: { body: { type: "object", required: ["defaultLang"], properties: { defaultLang: { type: "string", enum: ["en", "cs"] } } } } },
+    async (request) => {
+      const { defaultLang } = request.body as { defaultLang: "en" | "cs" };
+      SetSetting("default_lang", defaultLang);
+      return { defaultLang };
     },
   );
 

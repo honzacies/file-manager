@@ -377,6 +377,19 @@ try {
     assert.match((await app.inject({ url: "/api/notifications", headers: { ...bob2, "x-lang": "cs" } })).json().items[0].text, /s tebou sdílí/);
   });
 
+  await Check("jazyk: volba uživatele, výchozí jazyk mění jen admin", async () => {
+    assert.equal((await app.inject({ url: "/api/auth/me", headers: alice })).json().lang, null);
+    const put = (lang: unknown) => app.inject({ method: "PUT", url: "/api/account/lang", headers: alice, payload: { lang } });
+    assert.equal((await put("cs")).statusCode, 200);
+    assert.equal((await app.inject({ url: "/api/auth/me", headers: alice })).json().lang, "cs");
+    assert.equal((await put("de")).statusCode, 400);
+    assert.equal((await put(null)).statusCode, 200);
+    const setDefault = (headers: Record<string, string>) => app.inject({ method: "PUT", url: "/api/admin/settings/lang", headers, payload: { defaultLang: "cs" } });
+    assert.equal((await setDefault(alice)).statusCode, 403);
+    assert.equal((await setDefault(admin)).statusCode, 200);
+    assert.equal((await app.inject({ url: "/api/public/lang" })).json().defaultLang, "cs");
+  });
+
   await Check("sdílení jen pro čtení: kopie a barva zakázané, hvězdička povolená", async () => {
     const file = (await app.inject({ url: "/api/user-shares/incoming", headers: bob2 })).json().find((s: { name: string }) => s.name === "novy.txt");
     assert.equal((await app.inject({ method: "POST", url: "/api/files/copy", headers: bob2, payload: { paths: [""], share: file.id } })).statusCode, 403);

@@ -1,11 +1,14 @@
 import type { FastifyInstance } from "fastify";
 import { CreateSession, DeleteOtherSessions, DeleteSession, HashPassword, RequireOwnPassword, RequireUser, SESSION_COOKIE, type SessionUser, VerifyPassword } from "../Auth.ts";
-import { Db } from "../Db.ts";
+import { Db, GetSetting } from "../Db.ts";
 import { PersonById } from "../People.ts";
 import { HttpError } from "../Storage.ts";
 import { T } from "../Lang.ts";
 
 export async function AuthRoutes(app: FastifyInstance) {
+  // Výchozí jazyk od admina — pro prohlížeče, které nechtějí češtinu ani angličtinu (i před přihlášením).
+  app.get("/public/lang", async () => ({ defaultLang: GetSetting("default_lang") ?? "en" }));
+
   app.post(
     "/auth/login",
     {
@@ -50,7 +53,10 @@ export async function AuthRoutes(app: FastifyInstance) {
     scope.addHook("preHandler", RequireUser);
 
     // Role z relace + jméno a avatar pro zobrazení.
-    scope.get("/auth/me", async (request) => ({ ...PersonById(request.user.id), role: request.user.role }));
+    scope.get("/auth/me", async (request) => {
+      const { lang } = Db.prepare("SELECT lang FROM users WHERE id = ?").get(request.user.id) as { lang: string | null };
+      return { ...PersonById(request.user.id), role: request.user.role, lang };
+    });
 
     scope.post(
       "/account/password",

@@ -3,13 +3,14 @@
 import { Button, Form, Input, Label, TextField, toast } from "@heroui/react";
 import { useRef, useState } from "react";
 import { Icon } from "@/Components/Icon";
+import { LanguageSelect, useLanguage } from "@/Components/Language";
 import { PageHeader } from "@/Components/PageHeader";
 import { Panel } from "@/Components/Panel";
 import { PasswordField } from "@/Components/PasswordField";
 import { type User, useSetUser, useUser } from "@/Components/Session";
 import { UserAvatar } from "@/Components/UserAvatar";
 import { ApiFetch, ErrorText } from "@/lib/api";
-import { CurrentLang, t } from "@/lib/i18n";
+import { CurrentLang, t, type Lang } from "@/lib/i18n";
 
 const AVATAR_SIZE = 256;
 
@@ -136,6 +137,37 @@ function ProfilePanel() {
   );
 }
 
+function LanguagePanel() {
+  const user = useUser();
+  const setUser = useSetUser();
+  const { setPreference } = useLanguage();
+  const [pending, setPending] = useState(false);
+
+  async function Change(value: string) {
+    const lang = value === "auto" ? null : (value as Lang);
+    setPending(true);
+    const result = await ApiFetch("/api/account/lang", "PUT", { lang });
+    setPending(false);
+    if (!result.ok) return toast.danger(ErrorText(result));
+    setUser({ ...user, lang });
+    // Až po uložení — změna jazyka vykreslí appku znovu.
+    setPreference(lang);
+  }
+
+  return (
+    <Panel>
+      <h2 className="mb-1 font-semibold">{t("Language", "Jazyk")}</h2>
+      <p className="mb-5 text-sm text-muted">
+        {t(
+          "Automatic follows your browser's language, or the server's default if your browser prefers neither English nor Czech.",
+          "Automaticky = podle jazyka prohlížeče, a když prohlížeč nechce češtinu ani angličtinu, podle výchozího jazyka serveru.",
+        )}
+      </p>
+      <LanguageSelect label={t("App language", "Jazyk aplikace")} value={user.lang ?? "auto"} onChange={Change} auto isDisabled={pending} />
+    </Panel>
+  );
+}
+
 export default function AccountPage() {
   const user = useUser();
   const [current, setCurrent] = useState("");
@@ -166,6 +198,7 @@ export default function AccountPage() {
         description={`${t("Signed in as", "Přihlášen jako")} ${user.username} (${user.role === "admin" ? t("administrator", "administrátor") : t("user", "uživatel")}).`}
       />
       <ProfilePanel />
+      <LanguagePanel />
       <Panel>
         <h2 className="mb-1 font-semibold">{t("Change password", "Změna hesla")}</h2>
         <p className="mb-5 text-sm text-muted">{t("All your other devices will be signed out.", "Po změně se odhlásí všechna ostatní zařízení.")}</p>
