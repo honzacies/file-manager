@@ -84,6 +84,10 @@ function ClickMode(event: React.MouseEvent) {
 // (první byl prázdný -> označuje, byl zaškrtnutý -> odznačuje). Jedno tažení naráz, stačí modul.
 let paint: { checked: boolean } | null = null;
 
+// ponytail: pevná prodleva místo systémového nastavení dvojkliku (prohlížeč ho nezveřejňuje)
+const DOUBLE_CLICK_MS = 250;
+let openTimer = 0;
+
 function StartPaint(entry: Entry, handlers: ItemHandlers, event: React.PointerEvent) {
   if (!handlers.setChecked || event.button !== 0 || event.pointerType === "touch") return;
   // bez tohohle by prohlížeč začal táhnout celý řádek (drag & drop) nebo označovat text
@@ -103,15 +107,17 @@ function useItemProps(entry: Entry, handlers: ItemHandlers) {
     tabIndex: -1,
     draggable: !handlers.readOnly,
     onClick: (event: React.MouseEvent) => {
-      // Na dotyku se neoznačuje, ale rovnou otevírá (dvojklik prstem je nepohodlný).
       // Veřejné sdílení nemá výběr — klik rovnou otevírá.
-      if (handlers.readOnly || ((event.nativeEvent as PointerEvent).pointerType === "touch" && !handlers.selected.size)) return handlers.onOpen(entry);
-      // Režim výběru: když už je něco označené, obyčejný klik výběr nepřepíše, jen položku
-      // přidá/odebere — výběr se tak nedá omylem "odkliknout".
+      if (handlers.readOnly) return handlers.onOpen(entry);
+      // Ctrl/Shift klik označuje (přidá / rozsah).
       const mode = ClickMode(event);
-      handlers.onSelect(entry.name, mode === "replace" && handlers.selected.size ? "toggle" : mode);
+      if (mode !== "replace") return handlers.onSelect(entry.name, mode);
+      // Jeden klik otevírá, dvojklik označuje. Otevření čeká, jestli nepřijde druhý klik —
+      // jinak by se složka otevřela dřív, než dvojklik doběhne.
+      window.clearTimeout(openTimer);
+      if (event.detail > 1) return handlers.onSelect(entry.name, "toggle");
+      openTimer = window.setTimeout(() => handlers.onOpen(entry), DOUBLE_CLICK_MS);
     },
-    onDoubleClick: () => handlers.onOpen(entry),
     // `buttons & 1` = levé tlačítko pořád drží (pointerup mimo okno by jinak nechal malování zapnuté)
     onPointerEnter: (event: React.PointerEvent) => {
       if (!paint) return;
