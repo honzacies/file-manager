@@ -67,12 +67,18 @@ function useCoverColors(url: string | undefined) {
       if (!context) return;
       context.drawImage(image, 0, 0, 3, 3);
       const data = context.getImageData(0, 0, 3, 3).data;
-      const cells = Array.from({ length: 9 }, (_, i) => RgbToHsl(data[i * 4], data[i * 4 + 1], data[i * 4 + 2])).sort((a, b) => b[1] - a[1]);
-      // černobílý obal nechat šedý (umělá sytost by vymyslela barvu), jinak aspoň 55 % sytosti
-      const gray = cells[0][1] < 0.08;
+      // Sytost skoro černých a skoro bílých pixelů je jen šum (rgb(2,1,1) má „sytost“ 33 %) → nepočítat ji.
+      const cells = Array.from({ length: 9 }, (_, i) => RgbToHsl(data[i * 4], data[i * 4 + 1], data[i * 4 + 2]))
+        .map(([h, sat, l]): [number, number, number] => [h, l < 0.1 || l > 0.92 ? 0 : sat, l])
+        .sort((a, b) => b[1] - a[1]);
+      if (cells[0][1] < 0.12) {
+        // Černobílý / skoro černý obal: odstíny šedé (barvy by si vymýšlel), ale dost rozdílné, ať je pohyb vidět.
+        return setColors(["hsl(0 0% 34%)", "hsl(0 0% 22%)", "hsl(0 0% 46%)", "hsl(0 0% 14%)"]);
+      }
+      // Barevný obal: nejsytější políčka, aspoň 55 % sytosti a jas v rozmezí, kde se barvy nepropadnou do černé.
       setColors(
         [cells[0], cells[1], cells[4], cells[8]].map(
-          ([h, sat, l]) => `hsl(${Math.round(h)} ${Math.round((gray ? sat : Math.max(sat, 0.55)) * 100)}% ${Math.round(Math.min(0.62, Math.max(0.32, l)) * 100)}%)`,
+          ([h, sat, l]) => `hsl(${Math.round(h)} ${Math.round(Math.max(sat, 0.55) * 100)}% ${Math.round(Math.min(0.62, Math.max(0.32, l)) * 100)}%)`,
         ),
       );
     };
@@ -284,7 +290,7 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
       <p className="px-5 pt-4 pb-2 text-sm font-semibold">
         {t("Queue", "Fronta")} <span className="font-normal text-white/60">· {queue.length}</span>
       </p>
-      <ol className="no-scrollbar px-2 pb-2 lg:min-h-0 lg:overflow-y-auto">
+      <ol className="player-scroll px-2 pb-2 lg:min-h-0 lg:overflow-y-auto">
         {queue.map((item, i) => {
           const current = i === index;
           const itemTags = tagsOf(item);
@@ -369,10 +375,11 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
                   Široká obrazovka: fronta vpravo a posouvá se jen ona. */}
               <div className="no-scrollbar flex min-h-0 flex-1 justify-center overflow-y-auto px-4 pb-[max(1.5rem,env(safe-area-inset-bottom))] sm:px-8 lg:overflow-visible lg:px-16">
                 <div className="flex h-fit w-full max-w-6xl flex-col items-center gap-8 lg:h-auto lg:min-h-0 lg:flex-row lg:items-stretch lg:gap-10">
-                  <div className="flex w-full flex-col items-center gap-6 lg:min-h-0 lg:flex-1 lg:justify-center">
-                    <div className="flex w-full items-center justify-center pt-2 lg:h-[min(26rem,55dvh)] lg:pt-0">
+                  {/* --art = šířka obalu i ovládání, ať obal lícuje s posuvníkem času */}
+                  <div className="flex w-full flex-col items-center gap-6 [--art:min(100%,28rem,52dvh)] lg:min-h-0 lg:flex-1 lg:justify-center lg:[--art:min(100%,28rem,55dvh)]">
+                    <div className="flex w-full items-center justify-center pt-2 lg:pt-0">
                       <div
-                        className={`aspect-square w-[min(100%,26rem,52dvh)] transition-transform duration-700 ease-[cubic-bezier(0.22,1,0.36,1)] lg:w-[min(100%,26rem,55dvh)] ${
+                        className={`aspect-square w-(--art) transition-transform duration-700 ease-[cubic-bezier(0.22,1,0.36,1)] ${
                           playing ? "scale-100" : "scale-[0.8]"
                         }`}
                       >
@@ -384,7 +391,7 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
                       </div>
                     </div>
 
-                    <div className="flex w-full max-w-md shrink-0 flex-col gap-4">
+                    <div className="flex w-(--art) shrink-0 flex-col gap-4">
                       <div className="min-w-0 text-center">
                         <p className="truncate text-xl font-semibold" title={track.name}>
                           {title}

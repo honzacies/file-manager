@@ -157,3 +157,14 @@ body {
 /* Posouvání bez viditelného posuvníku (přehrávač na telefonu, fronta). */
 .no-scrollbar { scrollbar-width: none; }
 .no-scrollbar::-webkit-scrollbar { display: none; }
+
+/* Posuvníky v celé appce: tenká čára bez podkladu — na tmavém tématu bílá, na světlém tmavá. */
+:root, .light, [data-theme="light"] { --scroll-thumb: oklch(0% 0 0 / 0.3); }
+.dark, [data-theme="dark"] { --scroll-thumb: oklch(100% 0 0 / 0.35); }
+* { scrollbar-width: thin; scrollbar-color: var(--scroll-thumb) transparent; }
+/* Safari a starší Chromium neznají scrollbar-width/color */
+::-webkit-scrollbar { width: 6px; height: 6px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: var(--scroll-thumb); border-radius: 9999px; }
+/* Přehrávač je vždy tmavý → bílá čára v každém tématu. */
+.player-scroll { --scroll-thumb: oklch(100% 0 0 / 0.4); scrollbar-color: var(--scroll-thumb) transparent; }
