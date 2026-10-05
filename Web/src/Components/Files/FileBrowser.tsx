@@ -677,7 +677,7 @@ export function FileBrowser() {
               onSubmit={(value) => value.trim() && Navigate(path, value.trim())}
               onClear={() => q && Navigate(path)}
               // Na úzké obrazovce se hledání zalomí pod cestu, na `lg` je vpravo vedle tlačítek.
-              className="min-w-0 flex-1 max-lg:order-6 lg:min-w-48 lg:max-w-80"
+              className="min-w-0 flex-1 max-lg:order-6 lg:ml-4 lg:min-w-48 lg:max-w-80"
             >
               <SearchField.Group className="h-10 rounded-full! px-2 shadow-sm">
                 <SearchField.SearchIcon className="ml-1" />
