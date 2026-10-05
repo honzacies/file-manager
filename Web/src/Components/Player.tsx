@@ -4,6 +4,7 @@ import { Button, Modal } from "@heroui/react";
 import { createContext, type ReactNode, useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
 import { ApiFetch } from "@/lib/api";
 import { t } from "@/lib/i18n";
+import { useTouch } from "@/lib/touch";
 import { Icon } from "./Icon";
 
 // Material Icons (Google), jako SVG — ostré v každé velikosti a bez čekání na font.
@@ -186,6 +187,7 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
     }
   });
   const [muted, setMuted] = useState(false);
+  const touch = useTouch();
 
   const track = queue[index] as Track | undefined;
   const tagsOf = useTags(queue);
@@ -428,6 +430,8 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
                         </button>
                       </div>
 
+                      {/* Na telefonu/tabletu hlasitost řídí tlačítka zařízení (iOS hlasitost stránce ani nedovolí) → bez posuvníku. */}
+                      {!touch && (
                       <div className="flex items-center gap-3">
                         <button type="button" onClick={() => setMuted((m) => !m)} aria-label={muted ? t("Unmute", "Zapnout zvuk") : t("Mute", "Ztlumit")} className="player-button size-9">
                           <Glyph d={volumeIcon} className="size-6" />
@@ -443,6 +447,7 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
                           className="flex-1"
                         />
                       </div>
+                      )}
                     </div>
                   </div>
 
