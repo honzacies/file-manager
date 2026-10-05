@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
+import { ApiFetch } from "@/lib/api";
 import { type Entry, KindOf } from "@/lib/format";
 import { t } from "@/lib/i18n";
 import { Icon } from "../Icon";
@@ -59,6 +60,41 @@ const FormatTime = (seconds: number) => {
 
 // "01 BREED.flac" -> "01 BREED"
 const TrackTitle = (name: string) => name.slice(name.lastIndexOf("/") + 1).replace(/\.[^.]+$/, "");
+
+interface Tags {
+  title?: string;
+  artist?: string;
+  album?: string;
+}
+
+// Tagy mají stejnou URL jako náhled, jen /tags místo /thumb (přihlášený prohlížeč i veřejné sdílení).
+const TagsUrl = (thumb: string) => thumb.replace("/thumb?", "/tags?");
+// Mezi otevřeními náhledu se tagy pamatují — ffprobe na serveru je cachovaný, ale request ne.
+const tagsCache = new Map<string, Tags>();
+
+// Tagy všech skladeb ve frontě (název, interpret, album). Dokud nedorazí, zobrazuje se název souboru.
+function useTags(urls: string[]) {
+  const [, setVersion] = useState(0);
+  useEffect(() => {
+    let cancelled = false;
+    for (const url of urls) {
+      if (tagsCache.has(url)) continue;
+      tagsCache.set(url, {});
+      ApiFetch<Tags>(url).then((result) => {
+        if (!result.ok) return;
+        tagsCache.set(url, result.body);
+        if (!cancelled) setVersion((v) => v + 1);
+      });
+    }
+    return () => {
+      cancelled = true;
+    };
+  }, [urls]);
+  return (url: string | undefined) => (url ? (tagsCache.get(url) ?? {}) : {});
+}
+
+// "Interpret · Album", prázdné části vynechané; nic = null (řádek se nezobrazí).
+const Byline = (tags: Tags) => [tags.artist, tags.album].filter(Boolean).join(" · ") || null;
 
 function Cover({ url, className }: { url?: string; className: string }) {
   const [failed, setFailed] = useState(false);
@@ -126,6 +162,12 @@ export function AudioPlayer({
   const src = urlFor(entry, true);
   const cover = thumbFor?.(entry);
   const colors = useCoverColors(cover);
+  const tagUrls = useMemo(() => (thumbFor ? queue.map((item) => TagsUrl(thumbFor(item.entry))) : []), [queue, thumbFor]);
+  const tagsOf = useTags(tagUrls);
+  const TagsFor = (item: Entry) => tagsOf(thumbFor && TagsUrl(thumbFor(item)));
+  const tags = TagsFor(entry);
+  const title = tags.title ?? TrackTitle(entry.name);
+  const byline = Byline(tags);
 
   const Go = (offset: number) => {
     const target = queue[position + offset];
@@ -167,7 +209,9 @@ export function AudioPlayer({
   useEffect(() => {
     if (!("mediaSession" in navigator)) return;
     navigator.mediaSession.metadata = new MediaMetadata({
-      title: TrackTitle(entry.name),
+      title,
+      artist: tags.artist ?? "",
+      album: tags.album ?? "",
       artwork: cover ? [{ src: new URL(cover, window.location.href).href, sizes: "480x480", type: "image/webp" }] : [],
     });
     navigator.mediaSession.setActionHandler("play", () => audio.current?.play());
@@ -229,13 +273,13 @@ export function AudioPlayer({
         <div className="flex w-full max-w-md flex-col gap-4">
           <div className="min-w-0 text-center">
             <p className="truncate text-xl font-semibold" title={entry.name}>
-              {TrackTitle(entry.name)}
+              {title}
             </p>
-            <p className="text-sm text-white/60">
-              {error
-                ? t("Your browser can't play this format. Download it instead.", "Tenhle formát prohlížeč neumí přehrát. Stáhni si ho.")
-                : `${position + 1} / ${queue.length}`}
-            </p>
+            {error ? (
+              <p className="text-sm text-white/60">{t("Your browser can't play this format. Download it instead.", "Tenhle formát prohlížeč neumí přehrát. Stáhni si ho.")}</p>
+            ) : (
+              byline && <p className="truncate text-sm text-white/60">{byline}</p>
+            )}
           </div>
 
           <div className="flex flex-col gap-1">
@@ -308,7 +352,10 @@ export function AudioPlayer({
                     }`}
                   >
                     <Cover key={thumbFor?.(item.entry)} url={thumbFor?.(item.entry)} className="size-10 shrink-0 rounded-md" />
-                    <span className={`min-w-0 flex-1 truncate text-sm ${current ? "font-semibold" : "text-white/80"}`}>{TrackTitle(item.entry.name)}</span>
+                    <span className="min-w-0 flex-1">
+                      <span className={`block truncate text-sm ${current ? "font-semibold" : "text-white/80"}`}>{TagsFor(item.entry).title ?? TrackTitle(item.entry.name)}</span>
+                      {TagsFor(item.entry).artist && <span className="block truncate text-xs text-white/50">{TagsFor(item.entry).artist}</span>}
+                    </span>
                     {current ? (
                       <span className="eq" data-paused={playing ? undefined : ""} aria-hidden>
                         <span />

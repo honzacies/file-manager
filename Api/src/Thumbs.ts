@@ -68,6 +68,9 @@ async function Slot<T>(job: () => Promise<T>) {
   }
 }
 
+// Klíč cache = cesta + velikost + čas změny → přepsaný soubor dostane nový náhled i tagy.
+const CacheKey = (abs: string, stat: { size: number; mtimeMs: number }) => createHash("sha1").update(`${abs}\0${stat.size}\0${stat.mtimeMs}`).digest("hex");
+
 // Cesta k hotovému náhledu, nebo null (typ bez náhledu, hudba bez coveru, chybí ffmpeg…).
 export async function GetThumb(abs: string): Promise<string | null> {
   const kind = ThumbKind(path.basename(abs));
@@ -75,7 +78,7 @@ export async function GetThumb(abs: string): Promise<string | null> {
   const stat = await fs.stat(abs).catch(() => null);
   if (!stat?.isFile()) return null;
 
-  const key = createHash("sha1").update(`${abs}\0${stat.size}\0${stat.mtimeMs}`).digest("hex");
+  const key = CacheKey(abs, stat);
   const file = path.join(THUMB_DIR, `${key}.webp`);
   const none = path.join(THUMB_DIR, `${key}.none`); // značka "náhled nejde", ať se ffmpeg nepouští pořád dokola
   if (existsSync(file)) {
@@ -105,6 +108,58 @@ export async function GetThumb(abs: string): Promise<string | null> {
   }).finally(() => inFlight.delete(key));
   inFlight.set(key, job);
   return job;
+}
+
+// ---- Tagy hudby (název, interpret, album) přes ffprobe ------------------------------------
+
+const FFPROBE = process.env.FFPROBE_PATH ?? "ffprobe";
+
+export interface Tags {
+  title?: string;
+  artist?: string;
+  album?: string;
+}
+
+function RunFfprobe(abs: string) {
+  return new Promise<string | null>((resolve) => {
+    const child = spawn(FFPROBE, ["-v", "error", "-show_entries", "format_tags:stream_tags", "-of", "json", abs], { stdio: ["ignore", "pipe", "ignore"], windowsHide: true });
+    let out = "";
+    child.stdout.setEncoding("utf8");
+    child.stdout.on("data", (chunk: string) => (out += chunk));
+    const timer = setTimeout(() => child.kill("SIGKILL"), TIMEOUT_MS);
+    child.on("error", () => (clearTimeout(timer), resolve(null)));
+    child.on("close", (code) => (clearTimeout(timer), resolve(code === 0 ? out : null)));
+  });
+}
+
+// Klíče se liší podle formátu (MP3 "title", FLAC "TITLE", Ogg je má u streamu) → bez ohledu na velikost písmen.
+export function PickTags(json: string): Tags {
+  const data = JSON.parse(json) as { format?: { tags?: Record<string, string> }; streams?: { tags?: Record<string, string> }[] };
+  const all: Record<string, string> = {};
+  for (const tags of [...(data.streams ?? []).map((stream) => stream.tags), data.format?.tags]) {
+    for (const [key, value] of Object.entries(tags ?? {})) {
+      const text = String(value).trim().slice(0, 200);
+      if (text) all[key.toLowerCase()] = text;
+    }
+  }
+  return { title: all.title, artist: all.artist ?? all.album_artist, album: all.album };
+}
+
+// Prázdný objekt = tagy nejsou (nebo nejde o hudbu). Výsledek se cachuje vedle náhledů, ffprobe běží jednou na verzi souboru.
+export async function GetTags(abs: string): Promise<Tags> {
+  if (ThumbKind(path.basename(abs)) !== "audio") return {};
+  const stat = await fs.stat(abs).catch(() => null);
+  if (!stat?.isFile()) return {};
+  const file = path.join(THUMB_DIR, `${CacheKey(abs, stat)}.tags.json`);
+  const cached = await fs.readFile(file, "utf8").catch(() => null);
+  if (cached) return JSON.parse(cached) as Tags;
+  const out = await Slot(() => RunFfprobe(abs));
+  // ffprobe chybí nebo selhal → necachovat, ať se to po doinstalování chytí samo
+  if (out === null) return {};
+  const tags = PickTags(out);
+  mkdirSync(THUMB_DIR, { recursive: true });
+  await fs.writeFile(file, JSON.stringify(tags)).catch(() => {});
+  return tags;
 }
 
 // Úklid: náhledy, na které 90 dní nikdo nesáhl (smazané/přepsané soubory).

@@ -6,7 +6,7 @@ import { pipeline } from "node:stream/promises";
 import type { FastifyInstance } from "fastify";
 import { RequireUser } from "../Auth.ts";
 import { PeopleByUsername } from "../People.ts";
-import { GetThumb, ThumbKind } from "../Thumbs.ts";
+import { GetTags, GetThumb, ThumbKind } from "../Thumbs.ts";
 import {
   AssertQuota,
   AssertWritable,
@@ -93,6 +93,14 @@ export async function FileRoutes(app: FastifyInstance) {
     const thumb = await GetThumb(abs);
     if (!thumb) throw new HttpError(404, T("Preview not available.", "Náhled není k dispozici."));
     return SendThumb(reply, thumb);
+  });
+
+  // Název, interpret a album skladby (pro přehrávač). {} = tagy nejsou.
+  app.get("/files/tags", { schema: { querystring: PathQuery } }, async (request) => {
+    const query = request.query as PathQueryT;
+    const { abs } = Resolve(ViewFor(request, query), query.path);
+    await StatOrThrow(abs);
+    return GetTags(abs);
   });
 
   app.get("/storage", async (request) => {

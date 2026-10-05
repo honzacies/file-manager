@@ -452,7 +452,7 @@ try {
     assert.ok(limited);
   });
 
-  await Check("náhledy: video, cover hudby, bez coveru 404, nejde ven ze složky, veřejné sdílení", async () => {
+  await Check("náhledy a tagy: video, cover hudby, bez coveru 404, tagy z FLAC, nejde ven ze složky, veřejné sdílení", async () => {
     const { spawnSync } = await import("node:child_process");
     const ffmpeg = (args: string[]) => spawnSync(process.env.FFMPEG_PATH ?? "ffmpeg", ["-v", "error", "-y", ...args]).status === 0;
     if (!ffmpeg(["-version"])) {
@@ -464,6 +464,7 @@ try {
     assert.ok(ffmpeg(["-f", "lavfi", "-i", "color=c=red:s=300x300", "-frames:v", "1", at("cover.png")]));
     assert.ok(ffmpeg(["-f", "lavfi", "-i", "sine=d=1", "-i", at("cover.png"), "-map", "0", "-map", "1", "-c:a", "libmp3lame", "-c:v", "mjpeg", "-disposition:v", "attached_pic", at("pisen.mp3")]));
     assert.ok(ffmpeg(["-f", "lavfi", "-i", "sine=d=1", "-c:a", "libmp3lame", at("bez-coveru.mp3")]));
+    assert.ok(ffmpeg(["-f", "lavfi", "-i", "sine=d=1", "-metadata", "title=Breed", "-metadata", "artist=Nirvana", "-metadata", "album=Nevermind", "-c:a", "flac", at("tagy.flac")]));
 
     const thumb = (p: string, headers = alice) => app.inject({ url: `/api/files/thumb?path=${encodeURIComponent(p)}`, headers });
     for (const name of ["klip.mp4", "pisen.mp3", "cover.png"]) {
@@ -476,6 +477,13 @@ try {
     assert.equal((await thumb("novy.txt")).statusCode, 404);
     assert.equal((await thumb("../bob/x.txt", bob2)).statusCode, 404);
     assert.equal((await app.inject({ url: `/api/files/thumb?path=klip.mp4` })).statusCode, 401);
+
+    const tags = (p: string, headers = alice) => app.inject({ url: `/api/files/tags?path=${encodeURIComponent(p)}`, headers });
+    assert.deepEqual((await tags("tagy.flac")).json(), { title: "Breed", artist: "Nirvana", album: "Nevermind" });
+    assert.deepEqual((await tags("bez-coveru.mp3")).json(), {}, "skladba bez tagů");
+    assert.deepEqual((await tags("klip.mp4")).json(), {}, "video tagy nečte");
+    assert.equal((await tags("../bob/x.txt", bob2)).statusCode, 404);
+    assert.equal((await app.inject({ url: "/api/files/tags?path=tagy.flac" })).statusCode, 401);
 
     const { token } = (await app.inject({ method: "POST", url: "/api/shares", headers: alice, payload: { path: "klip.mp4" } })).json();
     assert.equal((await app.inject({ url: `/api/public/shares/${token}/thumb` })).statusCode, 200);

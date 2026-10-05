@@ -4,7 +4,7 @@ import type { FastifyInstance } from "fastify";
 import { RequireUser } from "../Auth.ts";
 import { Db } from "../Db.ts";
 import { PersonById } from "../People.ts";
-import { GetThumb } from "../Thumbs.ts";
+import { GetTags, GetThumb } from "../Thumbs.ts";
 import { GetRootDir, GetView, HttpError, ListDir, RelFromRoot, Resolve, SendFile, SendThumb, StatOrThrow } from "../Storage.ts";
 import { T } from "../Lang.ts";
 
@@ -125,6 +125,13 @@ export async function ShareRoutes(app: FastifyInstance) {
     const thumb = await GetThumb(ResolveInShare(share, (request.query as { path: string }).path).abs);
     if (!thumb) throw new HttpError(404, T("Preview not available.", "Náhled není k dispozici."));
     return SendThumb(reply, thumb);
+  });
+
+  app.get("/public/shares/:token/tags", { config: PublicLimit, schema: { querystring: PublicQuery } }, async (request) => {
+    const share = FindShare((request.params as { token: string }).token);
+    const { abs } = ResolveInShare(share, (request.query as { path: string }).path);
+    await StatOrThrow(abs);
+    return GetTags(abs);
   });
 
   app.get("/public/shares/:token/download", { config: PublicLimit, schema: { querystring: PublicQuery } }, async (request, reply) => {
