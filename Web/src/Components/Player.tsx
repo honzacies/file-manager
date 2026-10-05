@@ -3,6 +3,7 @@
 import { Button, Modal } from "@heroui/react";
 import { createContext, type ReactNode, useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
 import { ApiFetch } from "@/lib/api";
+import { PaletteFromPixels } from "@/lib/coverColors";
 import { t } from "@/lib/i18n";
 import { useTouch } from "@/lib/touch";
 import { Icon } from "./Icon";
@@ -42,20 +43,7 @@ const FALLBACK_COLORS = ["#d9302d", "#7b2cbf", "#1f4e79", "#3a0ca3"];
 const BLACK = ["#000", "#000", "#000", "#000"];
 const VOLUME_KEY = "cloud.volume";
 
-function RgbToHsl(r: number, g: number, b: number): [number, number, number] {
-  const [rr, gg, bb] = [r / 255, g / 255, b / 255];
-  const max = Math.max(rr, gg, bb);
-  const min = Math.min(rr, gg, bb);
-  const l = (max + min) / 2;
-  if (max === min) return [0, 0, l];
-  const d = max - min;
-  const s = l > 0.5 ? d / (2 - max - min) : d / (max + min);
-  const h = max === rr ? (gg - bb) / d + (gg < bb ? 6 : 0) : max === gg ? (bb - rr) / d + 2 : (rr - gg) / d + 4;
-  return [h * 60, s, l];
-}
-
-// 4 barvy z obalu pro mesh gradient: obal zmenšený na 3×3 px, nejsytější políčka, zesílená
-// (tmavé a šedivé obaly by jinak daly hnědošedou kaši, na které pohyb skoro není vidět).
+// 4 barvy z obalu pro mesh gradient (výběr barev v lib/coverColors.ts).
 function useCoverColors(url: string | undefined) {
   const [colors, setColors] = useState(BLACK);
   useEffect(() => {
@@ -63,25 +51,11 @@ function useCoverColors(url: string | undefined) {
     const image = new Image();
     image.onload = () => {
       const canvas = document.createElement("canvas");
-      canvas.width = canvas.height = 3;
+      canvas.width = canvas.height = 32;
       const context = canvas.getContext("2d", { willReadFrequently: true });
       if (!context) return;
-      context.drawImage(image, 0, 0, 3, 3);
-      const data = context.getImageData(0, 0, 3, 3).data;
-      // Sytost skoro černých a skoro bílých pixelů je jen šum (rgb(2,1,1) má „sytost“ 33 %) → nepočítat ji.
-      const cells = Array.from({ length: 9 }, (_, i) => RgbToHsl(data[i * 4], data[i * 4 + 1], data[i * 4 + 2]))
-        .map(([h, sat, l]): [number, number, number] => [h, l < 0.1 || l > 0.92 ? 0 : sat, l])
-        .sort((a, b) => b[1] - a[1]);
-      if (cells[0][1] < 0.12) {
-        // Černobílý / skoro černý obal: odstíny šedé (barvy by si vymýšlel), ale dost rozdílné, ať je pohyb vidět.
-        return setColors(["hsl(0 0% 34%)", "hsl(0 0% 22%)", "hsl(0 0% 46%)", "hsl(0 0% 14%)"]);
-      }
-      // Barevný obal: nejsytější políčka, aspoň 55 % sytosti a jas v rozmezí, kde se barvy nepropadnou do černé.
-      setColors(
-        [cells[0], cells[1], cells[4], cells[8]].map(
-          ([h, sat, l]) => `hsl(${Math.round(h)} ${Math.round(Math.max(sat, 0.55) * 100)}% ${Math.round(Math.min(0.62, Math.max(0.32, l)) * 100)}%)`,
-        ),
-      );
+      context.drawImage(image, 0, 0, 32, 32);
+      setColors(PaletteFromPixels(context.getImageData(0, 0, 32, 32).data));
     };
     image.onerror = () => setColors(FALLBACK_COLORS);
     image.src = url;

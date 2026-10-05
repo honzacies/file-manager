@@ -156,7 +156,8 @@ function useItemProps(entry: Entry, handlers: ItemHandlers) {
       if (Date.now() < ignoreClickUntil) return;
       // Veřejné sdílení nemá výběr — klik rovnou otevírá.
       // Na dotyku bez výběru ťuknutí rovnou otevírá (dvojklik prstem je nepohodlný).
-      if (handlers.readOnly || ((event.nativeEvent as PointerEvent).pointerType === "touch" && !handlers.selected.size)) return handlers.onOpen(entry);
+      // (Safari na iPhonu posílá click bez pointerType → rozhoduje typ zařízení, ne událost.)
+      if (handlers.readOnly || (touch && !handlers.selected.size)) return handlers.onOpen(entry);
       // Klik označuje, dvojklik otevírá. Když už je něco označené, klik položku jen přidá/odebere —
       // výběr se tak nedá omylem "odkliknout". Druhý klik dvojkliku (detail 2) výběr nemění.
       if (event.detail > 1) return;
@@ -217,6 +218,7 @@ function SortHeader({ label, sortKey, sort, onSort, className = "" }: { label: s
 }
 
 function SelectBox({ entry, handlers }: { entry: Entry; handlers: ItemHandlers }) {
+  const touch = useTouch();
   return (
     // biome-ignore lint/a11y/noStaticElementInteractions: jen zastaví klik, aby se nepropsal do řádku
     <span
@@ -225,7 +227,7 @@ function SelectBox({ entry, handlers }: { entry: Entry; handlers: ItemHandlers }
       onClickCapture={(event) => {
         // Myší klik už stav nastavil v StartPaint — label by ho jinak přepnul zpátky.
         // Klávesnice (mezerník, detail = 0) jde dál přes onChange.
-        if (handlers.setChecked && event.detail > 0 && (event.nativeEvent as PointerEvent).pointerType !== "touch") {
+        if (handlers.setChecked && event.detail > 0 && !touch) {
           event.preventDefault();
           event.stopPropagation();
         }

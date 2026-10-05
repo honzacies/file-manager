@@ -90,7 +90,13 @@ body {
   color: var(--foreground);
   /* clip, ne hidden: hidden udělá z body vlastní posuvný kontejner a jeho posuvník zůstane vidět i pod modálem */
   overflow-x: clip;
-  /* dvojité ťuknutí na telefonu nepřibližuje stránku (štípnutí prsty funguje dál) */
+}
+
+/* Dvojité ťuknutí nepřibližuje stránku (štípnutí prsty funguje dál). Na všech prvcích, ne jen na body —
+   Safari na iPhonu bere touch-action z prvku pod prstem. */
+*,
+*::before,
+*::after {
   touch-action: manipulation;
 }
 

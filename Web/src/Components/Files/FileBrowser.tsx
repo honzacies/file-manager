@@ -527,7 +527,6 @@ export function FileBrowser() {
       onClick={(event) => {
         if ((event.target as HTMLElement).closest("[role=option], button, input, label, a, [role=menu]")) return;
         // Výběr se ruší jen úmyslně: Ctrl/Cmd+klik do prázdna, na dotyku dvojité ťuknutí (+ Esc, ✕ v liště).
-        const touch = (event.nativeEvent as PointerEvent).pointerType === "touch";
         if (event.ctrlKey || event.metaKey) setSelected(new Set());
         else if (touch && event.timeStamp - lastEmptyTap.current < 350) setSelected(new Set());
         if (touch) lastEmptyTap.current = event.timeStamp;
