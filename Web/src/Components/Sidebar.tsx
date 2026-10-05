@@ -9,6 +9,7 @@ import { FormatBytes } from "@/lib/format";
 import { Brand } from "./Brand";
 import { Icon } from "./Icon";
 import { NotificationBell } from "./Notifications";
+import { usePlayer } from "./Player";
 import { ForgetUser, useUser } from "./Session";
 import { ClearOffline } from "@/lib/offline";
 import { ThemeToggle } from "./ThemeToggle";
@@ -88,8 +89,10 @@ function StorageMeter() {
 function SidebarBody({ onNavigate }: { onNavigate?: () => void }) {
   const user = useUser();
   const router = useRouter();
+  const player = usePlayer();
 
   async function Logout() {
+    player.Stop();
     await ApiFetch("/api/auth/logout", "POST");
     // Na sdíleném počítači nemá po odhlášení nic zůstat.
     ForgetUser();

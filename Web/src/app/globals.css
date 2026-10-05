@@ -88,7 +88,8 @@
 body {
   background: var(--background);
   color: var(--foreground);
-  overflow-x: hidden;
+  /* clip, ne hidden: hidden udělá z body vlastní posuvný kontejner a jeho posuvník zůstane vidět i pod modálem */
+  overflow-x: clip;
 }
 
 /* Přehrávač hudby (AudioPlayer): mesh gradient z barev obalu, posuvníky, ekvalizér ve frontě. */

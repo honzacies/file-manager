@@ -4,7 +4,7 @@ import { Button, Modal, Spinner } from "@heroui/react";
 import { useEffect, useState } from "react";
 import { type Entry, FormatBytes, KindOf } from "@/lib/format";
 import { FileIcon } from "../FileIcon";
-import { AudioPlayer } from "./AudioPlayer";
+import { usePlayer } from "../Player";
 import { Icon } from "../Icon";
 import { t } from "@/lib/i18n";
 
@@ -45,11 +45,23 @@ export function PreviewModal({
   thumbFor?: (entry: Entry) => string;
 }) {
   const entry = index === null ? null : entries[index];
+  const player = usePlayer();
+
+  // Hudba nemá náhled — spustí globální přehrávač (hraje dál i po zavření) s celou složkou jako frontou.
+  useEffect(() => {
+    if (!entry || KindOf(entry) !== "audio") return;
+    const songs = entries.filter((item) => KindOf(item) === "audio");
+    player.Play(
+      songs.map((song) => ({ name: song.name, src: urlFor(song, true), download: urlFor(song, false), thumb: thumbFor?.(song) })),
+      songs.indexOf(entry),
+    );
+    onClose();
+    // Jen při otevření skladby; rodič posílá funkce při každém renderu znovu.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [entry]);
 
   useEffect(() => {
     if (index === null) return;
-    // U hudby šipky posouvají ve skladbě (AudioPlayer), mezi skladbami se přepíná ve frontě.
-    if (KindOf(entries[index]) === "audio") return;
     const OnKey = (event: KeyboardEvent) => {
       if (event.key === "ArrowLeft" && index > 0) onIndexChange(index - 1);
       if (event.key === "ArrowRight" && index < entries.length - 1) onIndexChange(index + 1);
@@ -58,14 +70,17 @@ export function PreviewModal({
     return () => window.removeEventListener("keydown", OnKey);
   }, [index, entries, onIndexChange]);
 
-  if (!entry || index === null) return null;
+  if (!entry || index === null || KindOf(entry) === "audio") return null;
   const kind = KindOf(entry);
   const inlineUrl = urlFor(entry, true);
 
   return (
     <Modal.Backdrop isOpen onOpenChange={(open) => !open && onClose()} variant="opaque" className="bg-black/95! backdrop-blur-sm">
       <Modal.Container size="full" className="p-0!">
-        <Modal.Dialog className="isolate flex h-dvh max-h-dvh! flex-col gap-0 rounded-none! bg-transparent! p-0! text-white shadow-none!">
+        <Modal.Dialog className="flex h-dvh max-h-dvh! flex-col gap-0 rounded-none! bg-transparent! p-0! text-white shadow-none!">
+          {/* Modal je portál, ale události bublají Reactem do rodiče — pravý klik by otevřel menu složky pod náhledem. */}
+          {/* biome-ignore lint/a11y/noStaticElementInteractions: jen zastaví bublání */}
+          <div className="contents" onContextMenu={(event) => event.stopPropagation()} onClick={(event) => event.stopPropagation()}>
           <header className="flex items-center gap-3 px-4 py-3">
             <FileIcon name={entry.name} isDir={false} className="text-[22px]" />
             <div className="min-w-0 flex-1">
@@ -93,7 +108,6 @@ export function PreviewModal({
               // biome-ignore lint/a11y/useMediaCaption: uživatelská videa titulky nemají
               <video key={inlineUrl} src={inlineUrl} controls autoPlay className="max-h-full max-w-full" />
             )}
-            {kind === "audio" && <AudioPlayer entries={entries} index={index} onIndexChange={onIndexChange} urlFor={urlFor} thumbFor={thumbFor} />}
             {kind === "pdf" && <iframe src={inlineUrl} title={entry.name} className="h-full w-full max-w-5xl rounded-xl bg-white" />}
             {kind === "text" && (
               <div className="flex h-full w-full max-w-5xl">
@@ -101,7 +115,7 @@ export function PreviewModal({
               </div>
             )}
 
-            {index > 0 && kind !== "audio" && (
+            {index > 0 && (
               <Button
                 isIconOnly
                 aria-label={t("Previous file", "Předchozí soubor")}
@@ -111,7 +125,7 @@ export function PreviewModal({
                 <Icon name="chevron_left" className="text-[26px]" />
               </Button>
             )}
-            {index < entries.length - 1 && kind !== "audio" && (
+            {index < entries.length - 1 && (
               <Button
                 isIconOnly
                 aria-label={t("Next file", "Další soubor")}
@@ -121,6 +135,7 @@ export function PreviewModal({
                 <Icon name="chevron_right" className="text-[26px]" />
               </Button>
             )}
+          </div>
           </div>
         </Modal.Dialog>
       </Modal.Container>

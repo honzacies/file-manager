@@ -4,6 +4,7 @@ import { Toast } from "@heroui/react";
 import { ThemeProvider } from "next-themes";
 import { useEffect } from "react";
 import { LanguageProvider } from "@/Components/Language";
+import { PlayerProvider } from "@/Components/Player";
 
 export function Providers({ children }: { children: React.ReactNode }) {
   // PWA + offline. Jen v produkci (v devu by cache mátla HMR) a jen na HTTPS — jinde register() selže.
@@ -17,7 +18,7 @@ export function Providers({ children }: { children: React.ReactNode }) {
     <ThemeProvider attribute="data-theme" defaultTheme="system" enableSystem>
       <LanguageProvider>
         <Toast.Provider placement="bottom" />
-        {children}
+        <PlayerProvider>{children}</PlayerProvider>
       </LanguageProvider>
     </ThemeProvider>
   );
