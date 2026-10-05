@@ -609,7 +609,7 @@ export function FileBrowser() {
           Lišta výběru nahrazuje řádek s cestou — stejná výška, seznam neposkočí. */}
       <div
         ref={toolbar}
-        className="sticky top-14 z-20 flex min-h-12 flex-wrap items-center gap-2 bg-background py-1 lg:top-0"
+        className="sticky top-14 z-20 flex min-h-12 flex-wrap items-center justify-between gap-2 bg-background py-1 lg:top-0 lg:flex-nowrap lg:gap-4"
       >
         {selected.size > 0 ? (
           <div className="flex min-h-10 w-full flex-wrap items-center gap-1 rounded-2xl bg-accent/10 py-1 pr-2 pl-4" role="toolbar" aria-label={t("Selection actions", "Akce s výběrem")}>
@@ -652,129 +652,137 @@ export function FileBrowser() {
           </div>
         ) : (
           <>
-            {/* Zpět o složku výš jedním kliknutím (drobečky se na úzké obrazovce zkracují). */}
-            {(path || q) && (
-              <Button
-                size="sm"
-                isIconOnly
-                variant="tertiary"
-                aria-label={t("Back", "Zpět")}
-                className="max-lg:order-1"
-                onPress={() => Navigate(q ? path : path.split("/").slice(0, -1).join("/"))}
-              >
-                <Icon name="arrow_back" className="text-[20px]" />
-              </Button>
-            )}
-            {/* Na `lg`+ si cesta vezme, co potřebuje, a zbytek řádku dostane hledání — název složky má přednost. */}
-            <div className="min-w-0 overflow-hidden max-lg:order-2 max-lg:flex-1">
-              <PathBreadcrumbs path={path} rootLabel={rootTitle} onNavigate={(next) => Navigate(next)} />
-            </div>
-            <SearchField
-              aria-label={t("Search this folder; Enter also searches subfolders", "Hledat v této složce, Enter hledá i v podsložkách")}
-              value={filter}
-              onChange={setFilter}
-              // Enter = hledat i v podsložkách, psaní = živý filtr aktuální složky
-              onSubmit={(value) => value.trim() && Navigate(path, value.trim())}
-              onClear={() => q && Navigate(path)}
-              // Na úzké obrazovce se hledání zalomí pod cestu, na `lg` je vpravo vedle tlačítek.
-              className="min-w-0 flex-1 max-lg:order-6 lg:ml-4 lg:min-w-48 lg:max-w-80"
-            >
-              <SearchField.Group className="h-10 rounded-full! px-2 shadow-sm">
-                <SearchField.SearchIcon className="ml-1" />
-                <SearchField.Input ref={searchInput} placeholder={t(`Search in “${folderName}”`, `Hledat v „${folderName}“`)} className="text-base" />
-                {/* nápověda jen při psaní — Enter spustí hledání i v podsložkách */}
-                {filter.trim() && filter !== q && (
-                  <Kbd className="hidden shrink-0 xl:inline-flex" variant="light">
-                    <Kbd.Content>↵ {t("incl. subfolders", "i v podsložkách")}</Kbd.Content>
-                  </Kbd>
-                )}
-                <SearchField.ClearButton />
-              </SearchField.Group>
-            </SearchField>
-            {!readOnly && (
-              <>
-                {/* Pod `lg` jen ikony — s názvy by se do lišty vedle cesty nevešly. */}
+            {/* Dvě skupiny: cesta vlevo, ovládání vpravo. Pod `lg` se skupiny rozpustí (`contents`),
+                ať si děti můžou lištu zalomit na dva řádky podle `order`. */}
+            {/* Cesta se nekrátí dřív než hledání — až když by zabrala třetinu lišty. */}
+            <div className="flex min-w-0 items-center gap-2 max-lg:contents lg:max-w-[33%] lg:shrink-0">
+              {/* Zpět o složku výš jedním kliknutím (drobečky se na úzké obrazovce zkracují). */}
+              {(path || q) && (
                 <Button
                   size="sm"
-                  variant="secondary"
-                  aria-label={t("New folder", "Nová složka")}
-                  className="max-lg:order-7"
-                  onPress={() => setDialog({ kind: "newFolder" })}
+                  isIconOnly
+                  variant="tertiary"
+                  aria-label={t("Back", "Zpět")}
+                  className="max-lg:order-1"
+                  onPress={() => Navigate(q ? path : path.split("/").slice(0, -1).join("/"))}
                 >
-                  <Icon name="create_new_folder" className="text-[18px]" />
-                  <span className="max-lg:hidden">{t("New folder", "Nová složka")}</span>
+                  <Icon name="arrow_back" className="text-[20px]" />
                 </Button>
-                <Dropdown>
-                  <Button size="sm" aria-label={t("Upload", "Nahrát")} className="max-lg:order-8">
-                    <Icon name="upload" className="text-[18px]" />
-                    <span className="max-lg:hidden">{t("Upload", "Nahrát")}</span>
-                    <Icon name="expand_more" className="-mr-1 text-[18px] max-lg:hidden" />
-                  </Button>
-                  <Dropdown.Popover placement="bottom end">
-                    <Dropdown.Menu aria-label={t("Upload", "Nahrát")} onAction={(key) => RunAction(String(key), [])}>
-                      <Dropdown.Item id="uploadFiles" textValue={t("Files", "Soubory")}>
-                        <Icon name="upload_file" className="text-[18px] text-muted" />
-                        <Label>{t("Files", "Soubory")}</Label>
-                      </Dropdown.Item>
-                      <Dropdown.Item id="uploadFolder" textValue={t("Folder", "Složku")}>
-                        <Icon name="drive_folder_upload" className="text-[18px] text-muted" />
-                        <Label>{t("Folder", "Složku")}</Label>
-                      </Dropdown.Item>
-                    </Dropdown.Menu>
-                  </Dropdown.Popover>
-                </Dropdown>
-              </>
-            )}
-            <Dropdown>
-              {/* V seznamu na širší obrazovce se řadí klikem na hlavičku sloupce. */}
-              <Button
-                size="sm"
-                variant="tertiary"
-                aria-label={`${t("Sort by", "Řadit podle")}: ${SortLabels()[sort.key]}`}
-                className={`max-lg:order-3 ${view === "grid" ? "" : "sm:hidden"}`}
+              )}
+              <div className="min-w-0 overflow-hidden max-lg:order-2 max-lg:flex-1">
+                <PathBreadcrumbs path={path} rootLabel={rootTitle} onNavigate={(next) => Navigate(next)} />
+              </div>
+            </div>
+
+            <div className="flex min-w-0 items-center gap-2 max-lg:contents">
+              <SearchField
+                aria-label={t("Search this folder; Enter also searches subfolders", "Hledat v této složce, Enter hledá i v podsložkách")}
+                value={filter}
+                onChange={setFilter}
+                // Enter = hledat i v podsložkách, psaní = živý filtr aktuální složky
+                onSubmit={(value) => value.trim() && Navigate(path, value.trim())}
+                onClear={() => q && Navigate(path)}
+                // Na úzké obrazovce se hledání zalomí pod cestu, na `lg` je vpravo vedle tlačítek.
+                // Na `lg` základ 20rem, ale smí se zúžit, ať se lišta nezalomí na dva řádky.
+                className="min-w-0 flex-1 max-lg:order-6 lg:grow-0 lg:basis-80"
               >
-                <Icon name="swap_vert" className="text-[18px]" />
-                {/* Na mobilu jen ikony — na název sloupce v řádku s cestou není místo. */}
-                <span className="hidden sm:inline">{SortLabels()[sort.key]}</span>
-                <Icon name={sort.dir === 1 ? "arrow_upward" : "arrow_downward"} className="-mr-1 text-[16px] text-muted max-lg:hidden" />
-              </Button>
-              <Dropdown.Popover placement="bottom end">
-                <Dropdown.Menu
-                  aria-label={t("Sort by", "Řadit podle")}
-                  // Stejný sloupec znovu = obrátit směr (jako klik na hlavičku).
-                  onAction={(key) => setSort((current) => ({ key: key as SortKey, dir: current.key === key ? ((current.dir * -1) as 1 | -1) : 1 }))}
+                <SearchField.Group className="h-10 rounded-full! px-2 shadow-sm">
+                  <SearchField.SearchIcon className="ml-1" />
+                  <SearchField.Input ref={searchInput} placeholder={t(`Search in “${folderName}”`, `Hledat v „${folderName}“`)} className="text-base" />
+                  {/* nápověda jen při psaní — Enter spustí hledání i v podsložkách */}
+                  {filter.trim() && filter !== q && (
+                    <Kbd className="hidden shrink-0 xl:inline-flex" variant="light">
+                      <Kbd.Content>↵ {t("incl. subfolders", "i v podsložkách")}</Kbd.Content>
+                    </Kbd>
+                  )}
+                  <SearchField.ClearButton />
+                </SearchField.Group>
+              </SearchField>
+              {!readOnly && (
+                <>
+                  {/* Pod `xl` jen ikony — s názvy by se do lišty vedle cesty nevešly. */}
+                  <Button
+                    size="sm"
+                    variant="secondary"
+                    aria-label={t("New folder", "Nová složka")}
+                    className="max-lg:order-7"
+                    onPress={() => setDialog({ kind: "newFolder" })}
+                  >
+                    <Icon name="create_new_folder" className="text-[18px]" />
+                    <span className="max-xl:hidden">{t("New folder", "Nová složka")}</span>
+                  </Button>
+                  <Dropdown>
+                    <Button size="sm" aria-label={t("Upload", "Nahrát")} className="max-lg:order-8">
+                      <Icon name="upload" className="text-[18px]" />
+                      <span className="max-xl:hidden">{t("Upload", "Nahrát")}</span>
+                      <Icon name="expand_more" className="-mr-1 text-[18px] max-xl:hidden" />
+                    </Button>
+                    <Dropdown.Popover placement="bottom end">
+                      <Dropdown.Menu aria-label={t("Upload", "Nahrát")} onAction={(key) => RunAction(String(key), [])}>
+                        <Dropdown.Item id="uploadFiles" textValue={t("Files", "Soubory")}>
+                          <Icon name="upload_file" className="text-[18px] text-muted" />
+                          <Label>{t("Files", "Soubory")}</Label>
+                        </Dropdown.Item>
+                        <Dropdown.Item id="uploadFolder" textValue={t("Folder", "Složku")}>
+                          <Icon name="drive_folder_upload" className="text-[18px] text-muted" />
+                          <Label>{t("Folder", "Složku")}</Label>
+                        </Dropdown.Item>
+                      </Dropdown.Menu>
+                    </Dropdown.Popover>
+                  </Dropdown>
+                </>
+              )}
+              <Dropdown>
+                {/* V seznamu na širší obrazovce se řadí klikem na hlavičku sloupce. */}
+                <Button
+                  size="sm"
+                  variant="tertiary"
+                  aria-label={`${t("Sort by", "Řadit podle")}: ${SortLabels()[sort.key]}`}
+                  className={`max-lg:order-3 ${view === "grid" ? "" : "sm:hidden"}`}
                 >
-                  {(Object.keys(SortLabels()) as SortKey[]).map((key) => (
-                    <Dropdown.Item key={key} id={key} textValue={SortLabels()[key]}>
-                      <Icon
-                        name={sort.dir === 1 ? "arrow_upward" : "arrow_downward"}
-                        className={`text-[18px] text-muted ${sort.key === key ? "" : "invisible"}`}
-                      />
-                      <Label>{SortLabels()[key]}</Label>
-                    </Dropdown.Item>
-                  ))}
-                </Dropdown.Menu>
-              </Dropdown.Popover>
-            </Dropdown>
-            <ToggleButtonGroup
-              className="max-lg:order-4"
-              aria-label={t("View", "Zobrazení")}
-              selectionMode="single"
-              disallowEmptySelection
-              selectedKeys={new Set([view])}
-              onSelectionChange={(keys) => ChangeView([...keys][0] as "list" | "grid")}
-              size="sm"
-            >
-              <ToggleButton id="list" isIconOnly aria-label={t("List", "Seznam")}>
-                <Icon name="view_list" className="text-[20px]" />
-              </ToggleButton>
-              <ToggleButton id="grid" isIconOnly aria-label={t("Grid", "Mřížka")}>
-                <ToggleButtonGroup.Separator />
-                <Icon name="grid_view" className="text-[20px]" />
-              </ToggleButton>
-            </ToggleButtonGroup>
-            {/* Pod `lg` zalomí lištu na dva řádky: nahoře cesta a zobrazení, dole hledání a nahrávání. */}
-            <div aria-hidden className="h-0 max-lg:order-5 max-lg:basis-full lg:hidden" />
+                  <Icon name="swap_vert" className="text-[18px]" />
+                  {/* Na mobilu jen ikony — na název sloupce v řádku s cestou není místo. */}
+                  <span className="hidden xl:inline">{SortLabels()[sort.key]}</span>
+                  <Icon name={sort.dir === 1 ? "arrow_upward" : "arrow_downward"} className="-mr-1 text-[16px] text-muted max-lg:hidden" />
+                </Button>
+                <Dropdown.Popover placement="bottom end">
+                  <Dropdown.Menu
+                    aria-label={t("Sort by", "Řadit podle")}
+                    // Stejný sloupec znovu = obrátit směr (jako klik na hlavičku).
+                    onAction={(key) => setSort((current) => ({ key: key as SortKey, dir: current.key === key ? ((current.dir * -1) as 1 | -1) : 1 }))}
+                  >
+                    {(Object.keys(SortLabels()) as SortKey[]).map((key) => (
+                      <Dropdown.Item key={key} id={key} textValue={SortLabels()[key]}>
+                        <Icon
+                          name={sort.dir === 1 ? "arrow_upward" : "arrow_downward"}
+                          className={`text-[18px] text-muted ${sort.key === key ? "" : "invisible"}`}
+                        />
+                        <Label>{SortLabels()[key]}</Label>
+                      </Dropdown.Item>
+                    ))}
+                  </Dropdown.Menu>
+                </Dropdown.Popover>
+              </Dropdown>
+              <ToggleButtonGroup
+                className="max-lg:order-4"
+                aria-label={t("View", "Zobrazení")}
+                selectionMode="single"
+                disallowEmptySelection
+                selectedKeys={new Set([view])}
+                onSelectionChange={(keys) => ChangeView([...keys][0] as "list" | "grid")}
+                size="sm"
+              >
+                <ToggleButton id="list" isIconOnly aria-label={t("List", "Seznam")}>
+                  <Icon name="view_list" className="text-[20px]" />
+                </ToggleButton>
+                <ToggleButton id="grid" isIconOnly aria-label={t("Grid", "Mřížka")}>
+                  <ToggleButtonGroup.Separator />
+                  <Icon name="grid_view" className="text-[20px]" />
+                </ToggleButton>
+              </ToggleButtonGroup>
+              {/* Pod `lg` zalomí lištu na dva řádky: nahoře cesta a zobrazení, dole hledání a nahrávání. */}
+              <div aria-hidden className="h-0 max-lg:order-5 max-lg:basis-full lg:hidden" />
+            </div>
           </>
         )}
       </div>
