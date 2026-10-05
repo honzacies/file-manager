@@ -378,10 +378,10 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
               <div className="no-scrollbar flex min-h-0 flex-1 justify-center overflow-y-auto px-4 pb-[max(1.5rem,env(safe-area-inset-bottom))] sm:px-8 lg:overflow-visible lg:px-16">
                 <div className="flex h-fit w-full max-w-6xl flex-col items-center gap-8 lg:h-auto lg:min-h-0 lg:flex-row lg:items-stretch lg:gap-10">
                   {/* --art = šířka obalu i ovládání, ať obal lícuje s posuvníkem času */}
-                  <div className="flex w-full flex-col items-center gap-6 [--art:min(100%,28rem,52dvh)] lg:min-h-0 lg:flex-1 lg:justify-center lg:[--art:min(100%,28rem,55dvh)]">
+                  <div className="flex w-full flex-col items-center gap-4 [--art:min(100%,28rem,52dvh)] lg:min-h-0 lg:flex-1 lg:justify-center lg:[--art:min(100%,28rem,55dvh)]">
                     <div className="flex w-full items-center justify-center pt-2 lg:pt-0">
                       <div
-                        className={`aspect-square w-(--art) transition-transform duration-700 ease-[cubic-bezier(0.22,1,0.36,1)] ${
+                        className={`aspect-square w-(--art) origin-bottom transition-transform duration-700 ease-[cubic-bezier(0.22,1,0.36,1)] ${
                           playing ? "scale-100" : "scale-[0.8]"
                         }`}
                       >
@@ -394,7 +394,7 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
                     </div>
 
                     <div className="flex w-(--art) shrink-0 flex-col gap-4">
-                      <div className="min-w-0 text-center">
+                      <div className="mb-3 min-w-0 text-left">
                         <p className="truncate text-xl font-semibold" title={track.name}>
                           {title}
                         </p>

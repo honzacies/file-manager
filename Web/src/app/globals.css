@@ -90,6 +90,17 @@ body {
   color: var(--foreground);
   /* clip, ne hidden: hidden udělá z body vlastní posuvný kontejner a jeho posuvník zůstane vidět i pod modálem */
   overflow-x: clip;
+  /* dvojité ťuknutí na telefonu nepřibližuje stránku (štípnutí prsty funguje dál) */
+  touch-action: manipulation;
+}
+
+/* iOS přiblíží stránku při psaní do pole s písmem menším než 16 px → na dotyku aspoň 16 px. */
+@media (pointer: coarse) {
+  input,
+  textarea,
+  select {
+    font-size: max(16px, 1em);
+  }
 }
 
 /* Přehrávač hudby (AudioPlayer): mesh gradient z barev obalu, posuvníky, ekvalizér ve frontě. */
