@@ -18,9 +18,11 @@ export function PathBreadcrumbs({ path, rootLabel, onNavigate }: { path: string;
             key={level.path}
             // aktuální úroveň = poslední položka (řeší React Aria sám)
             onPress={isCurrent ? undefined : () => onNavigate(level.path)}
-            // Na mobilu se vejdou jen poslední dvě úrovně, zbytek je schovaný.
+            // Na mobilu je v liště místo jen na aktuální složku, do `lg` na poslední dvě úrovně.
             // Ubírá se z nadřazených úrovní, aktuální složka zůstává čitelná celá.
-            className={`${i < levels.length - 2 ? "max-sm:hidden " : ""}${isCurrent ? "shrink-0 font-medium text-foreground" : "min-w-0 text-muted hover:text-accent"}`}
+            className={`${i < levels.length - 1 ? "max-sm:hidden " : ""}${i < levels.length - 2 ? "max-lg:hidden " : ""}${
+              isCurrent ? "shrink-0 font-medium text-foreground" : "min-w-0 text-muted hover:text-accent"
+            }`}
           >
             {i === 0 && <Icon name="home" className="mr-1 text-[18px]" />}
             <span className="min-w-0 truncate sm:max-w-48">{level.label}</span>

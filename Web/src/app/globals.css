@@ -185,3 +185,9 @@ body {
 ::-webkit-scrollbar-thumb { background: var(--scroll-thumb); border-radius: 9999px; }
 /* Přehrávač je vždy tmavý → bílá čára v každém tématu. */
 .player-scroll { --scroll-thumb: oklch(100% 0 0 / 0.4); scrollbar-color: var(--scroll-thumb) transparent; }
+
+/* Hlavička sloupců se lepí hned pod lištu se jménem složky (ta na úzké obrazovce zalomí,
+   výšku do --toolbar-h měří FileBrowser). Nad `lg` je horní lišta appky skrytá.
+   Sčítá se až v `top` u hlavičky — calc v samotné proměnné by se spočítal tady s nulou. */
+:root { --toolbar-h: 0px; --app-top: 3.5rem; }
+@media (min-width: 1024px) { :root { --app-top: 0px; } }

@@ -363,7 +363,10 @@ export function FileItems({
 
   return (
     <div>
-      <div className={`sticky top-14 z-10 grid ${Columns(handlers)} items-center gap-3 border-b border-separator bg-background px-2 py-2 lg:top-0`}>
+      <div
+        className={`sticky z-10 grid ${Columns(handlers)} items-center gap-3 border-b border-separator bg-background px-2 py-2`}
+        style={{ top: "calc(var(--app-top) + var(--toolbar-h))" }}
+      >
         {!handlers.readOnly && (
           <Checkbox aria-label={t("Select all", "Označit vše")} isSelected={allSelected} isIndeterminate={!allSelected && handlers.selected.size > 0} onChange={onSelectAll}>
             <Checkbox.Content>
