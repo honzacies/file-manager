@@ -5,6 +5,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { ApiFetch, ErrorText, Query } from "@/lib/api";
 import { FilesFromDrop, FilesFromInput } from "@/lib/dropFiles";
+import { useTouch } from "@/lib/touch";
 import { CanPreview, type Entry, JoinPath } from "@/lib/format";
 import { ConfirmDialog } from "../ConfirmDialog";
 import { Icon } from "../Icon";
@@ -69,6 +70,7 @@ export function FileBrowser() {
   // Hledání v podsložkách (Enter v hledání nebo "Vyhledat ve složce").
   const q = params.get("q") ?? "";
   const uploads = useUploads();
+  const touch = useTouch();
   const offline = useOffline();
 
   const [entries, setEntries] = useState<Entry[] | null>(null);
@@ -688,6 +690,12 @@ export function FileBrowser() {
           </div>
         ) : (
           <>
+            {/* Na telefonu/tabletu zpět o složku výš jedním ťuknutím (drobečková navigace je tam úzká). */}
+            {touch && (path || q) && (
+              <Button size="sm" isIconOnly variant="tertiary" aria-label={t("Back", "Zpět")} onPress={() => Navigate(q ? path : path.split("/").slice(0, -1).join("/"))}>
+                <Icon name="arrow_back" className="text-[20px]" />
+              </Button>
+            )}
             <div className="min-w-0 flex-1 overflow-hidden">
               <PathBreadcrumbs path={path} rootLabel={rootTitle} onNavigate={(next) => Navigate(next)} />
             </div>

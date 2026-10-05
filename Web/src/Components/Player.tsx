@@ -12,7 +12,6 @@ const ICONS = {
   next: "M6 18l8.5-6L6 6v12zM16 6v12h2V6h-2z",
   play: "M8 5v14l11-7z",
   pause: "M6 19h4V5H6v14zm8-14v14h4V5h-4z",
-  queue: "M15 6H3v2h12V6zm0 4H3v2h12v-2zM3 16h8v-2H3v2zM17 6v8.18c-.31-.11-.65-.18-1-.18-1.66 0-3 1.34-3 3s1.34 3 3 3 3-1.34 3-3V8h3V6h-5z",
   volumeUp:
     "M3 9v6h4l5 5V4L7 9H3zm13.5 3c0-1.77-1.02-3.29-2.5-4.03v8.05c1.48-.73 2.5-2.25 2.5-4.02zM14 3.23v2.06c2.89.86 5 3.54 5 6.71s-2.11 5.85-5 6.71v2.06c4.01-.91 7-4.49 7-8.77s-2.99-7.86-7-8.77z",
   volumeDown: "M18.5 12c0-1.77-1.02-3.29-2.5-4.03v8.05c1.48-.73 2.5-2.25 2.5-4.02zM5 9v6h4l5 5V4L9 9H5z",
@@ -38,6 +37,8 @@ export interface Track {
 
 // Barvy pozadí, když skladba nemá obal (nebo se ho nepodaří přečíst).
 const FALLBACK_COLORS = ["#d9302d", "#7b2cbf", "#1f4e79", "#3a0ca3"];
+// Než se obal načte, je pozadí černé a do barev obalu se prolne (žádné cizí barvy na začátku).
+const BLACK = ["#000", "#000", "#000", "#000"];
 const VOLUME_KEY = "cloud.volume";
 
 function RgbToHsl(r: number, g: number, b: number): [number, number, number] {
@@ -55,7 +56,7 @@ function RgbToHsl(r: number, g: number, b: number): [number, number, number] {
 // 4 barvy z obalu pro mesh gradient: obal zmenšený na 3×3 px, nejsytější políčka, zesílená
 // (tmavé a šedivé obaly by jinak daly hnědošedou kaši, na které pohyb skoro není vidět).
 function useCoverColors(url: string | undefined) {
-  const [colors, setColors] = useState(FALLBACK_COLORS);
+  const [colors, setColors] = useState(BLACK);
   useEffect(() => {
     if (!url) return setColors(FALLBACK_COLORS);
     const image = new Image();
@@ -179,8 +180,6 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
     }
   });
   const [muted, setMuted] = useState(false);
-  // telefon: fronta místo obalu
-  const [showQueue, setShowQueue] = useState(false);
 
   const track = queue[index] as Track | undefined;
   const tagsOf = useTags(queue);
@@ -285,7 +284,7 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
       <p className="px-5 pt-4 pb-2 text-sm font-semibold">
         {t("Queue", "Fronta")} <span className="font-normal text-white/60">· {queue.length}</span>
       </p>
-      <ol className="min-h-0 overflow-y-auto px-2 pb-2">
+      <ol className="no-scrollbar px-2 pb-2 lg:min-h-0 lg:overflow-y-auto">
         {queue.map((item, i) => {
           const current = i === index;
           const itemTags = tagsOf(item);
@@ -366,17 +365,16 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
                 </Button>
               </header>
 
-              <div className="flex min-h-0 flex-1 justify-center px-4 pb-[max(1rem,env(safe-area-inset-bottom))] sm:px-8 lg:px-16">
-                <div className="flex min-h-0 w-full max-w-6xl gap-10">
-                  <div className="flex min-h-0 flex-1 flex-col items-center gap-6 lg:justify-center">
-                    {/* Obal (na telefonu místo něj fronta) zabere, kolik místa zbývá. Velikost obalu
-                        z rozměrů kontejneru (cqw/cqh) — na malé obrazovce se zmenší, nikdy nepřeteče přes ovládání. */}
-                    <div className="flex min-h-0 w-full flex-1 items-center justify-center [container-type:size] lg:h-[min(26rem,55dvh)] lg:flex-none">
-                      {showQueue && QueueList("h-full w-full max-w-md lg:hidden")}
+              {/* Telefon/tablet na výšku: obal, ovládání a fronta pod sebou na jedné posuvné stránce (posuvník skrytý).
+                  Široká obrazovka: fronta vpravo a posouvá se jen ona. */}
+              <div className="no-scrollbar flex min-h-0 flex-1 justify-center overflow-y-auto px-4 pb-[max(1.5rem,env(safe-area-inset-bottom))] sm:px-8 lg:overflow-visible lg:px-16">
+                <div className="flex h-fit w-full max-w-6xl flex-col items-center gap-8 lg:h-auto lg:min-h-0 lg:flex-row lg:items-stretch lg:gap-10">
+                  <div className="flex w-full flex-col items-center gap-6 lg:min-h-0 lg:flex-1 lg:justify-center">
+                    <div className="flex w-full items-center justify-center pt-2 lg:h-[min(26rem,55dvh)] lg:pt-0">
                       <div
-                        className={`aspect-square w-[min(100cqw,100cqh,26rem)] transition-transform duration-700 ease-[cubic-bezier(0.22,1,0.36,1)] ${
+                        className={`aspect-square w-[min(100%,26rem,52dvh)] transition-transform duration-700 ease-[cubic-bezier(0.22,1,0.36,1)] lg:w-[min(100%,26rem,55dvh)] ${
                           playing ? "scale-100" : "scale-[0.8]"
-                        } ${showQueue ? "hidden lg:block" : ""}`}
+                        }`}
                       >
                         <Cover
                           key={track.thumb}
@@ -437,25 +435,11 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
                           }}
                           className="flex-1"
                         />
-                        {/* Na telefonu se fronta ukazuje místo obalu; na širší obrazovce je pořád vpravo. */}
-                        {queue.length > 1 && (
-                          <button
-                            type="button"
-                            onClick={() => setShowQueue((v) => !v)}
-                            aria-pressed={showQueue}
-                            aria-label={t("Queue", "Fronta")}
-                            className={`player-button size-9 lg:hidden ${showQueue ? "bg-white/20" : ""}`}
-                          >
-                            <Glyph d={ICONS.queue} className="size-6" />
-                          </button>
-                        )}
                       </div>
                     </div>
                   </div>
 
-                  {queue.length > 1 && (
-                    <aside className="hidden max-h-[72dvh] w-[26rem] self-center lg:flex">{QueueList("h-full w-full")}</aside>
-                  )}
+                  {queue.length > 1 && <aside className="flex w-full max-w-md lg:max-h-[72dvh] lg:w-[26rem] lg:max-w-none lg:self-center">{QueueList("w-full lg:h-full")}</aside>}
                 </div>
               </div>
             </Modal.Dialog>

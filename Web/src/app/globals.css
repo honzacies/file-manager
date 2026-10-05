@@ -153,3 +153,7 @@ body {
   .mesh-blob { animation-duration: 90s; }
   .eq span { animation: none; }
 }
+
+/* Posouvání bez viditelného posuvníku (přehrávač na telefonu, fronta). */
+.no-scrollbar { scrollbar-width: none; }
+.no-scrollbar::-webkit-scrollbar { display: none; }

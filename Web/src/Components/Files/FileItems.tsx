@@ -2,6 +2,7 @@
 
 import { Checkbox } from "@heroui/react";
 import { type ReactNode, useState } from "react";
+import { useTouch } from "@/lib/touch";
 import { type Entry, FormatBytes, FormatDate, FormatDateShort, HasThumb, KindOf } from "@/lib/format";
 import { FileIcon } from "../FileIcon";
 import { Icon } from "../Icon";
@@ -94,7 +95,53 @@ function StartPaint(entry: Entry, handlers: ItemHandlers, event: React.PointerEv
   window.addEventListener("pointerup", () => (paint = null), { once: true });
 }
 
+// Dotyk: krátké ťuknutí otevírá, podržení označí a tažením prstu přes seznam se označují další.
+const LONG_PRESS_MS = 450;
+// Po podržení přijde ještě click (zvednutí prstu) — ten se nesmí brát jako ťuknutí.
+let ignoreClickUntil = 0;
+
+function StartLongPress(entry: Entry, handlers: ItemHandlers, event: React.PointerEvent) {
+  const setChecked = handlers.setChecked;
+  if (event.pointerType !== "touch" || !setChecked) return;
+  const [startX, startY] = [event.clientX, event.clientY];
+  const Cancel = () => {
+    window.clearTimeout(timer);
+    window.removeEventListener("pointermove", OnMove);
+    window.removeEventListener("pointerup", Cancel);
+    window.removeEventListener("pointercancel", Cancel);
+  };
+  // Prst se pohnul dřív, než podržení doběhlo = posouvání stránky, ne výběr.
+  const OnMove = (move: PointerEvent) => {
+    if (Math.hypot(move.clientX - startX, move.clientY - startY) > 10) Cancel();
+  };
+  const timer = window.setTimeout(() => {
+    Cancel();
+    navigator.vibrate?.(15);
+    setChecked(entry.name, true);
+    // ponytail: bez automatického posouvání u okraje seznamu; přidat, až bude potřeba označovat dlouhé seznamy
+    const OnTouchMove = (touchMove: TouchEvent) => {
+      touchMove.preventDefault(); // prst teď táhne výběr, ne stránku
+      const touch = touchMove.touches[0];
+      const name = (document.elementFromPoint(touch.clientX, touch.clientY) as HTMLElement | null)?.closest<HTMLElement>("[data-name]")?.dataset.name;
+      if (name) setChecked(name, true);
+    };
+    const End = () => {
+      document.removeEventListener("touchmove", OnTouchMove);
+      document.removeEventListener("touchend", End);
+      document.removeEventListener("touchcancel", End);
+      ignoreClickUntil = Date.now() + 600;
+    };
+    document.addEventListener("touchmove", OnTouchMove, { passive: false });
+    document.addEventListener("touchend", End);
+    document.addEventListener("touchcancel", End);
+  }, LONG_PRESS_MS);
+  window.addEventListener("pointermove", OnMove);
+  window.addEventListener("pointerup", Cancel);
+  window.addEventListener("pointercancel", Cancel);
+}
+
 function useItemProps(entry: Entry, handlers: ItemHandlers) {
+  const touch = useTouch();
   const selected = handlers.selected.has(entry.name);
   return {
     role: "option",
@@ -102,8 +149,11 @@ function useItemProps(entry: Entry, handlers: ItemHandlers) {
     "aria-selected": selected,
     "data-name": entry.name,
     tabIndex: -1,
-    draggable: !handlers.readOnly,
+    // přesouvání tažením jen myší — na dotyku podržení a tažení označuje
+    draggable: !handlers.readOnly && !touch,
+    onPointerDown: (event: React.PointerEvent) => StartLongPress(entry, handlers, event),
     onClick: (event: React.MouseEvent) => {
+      if (Date.now() < ignoreClickUntil) return;
       // Veřejné sdílení nemá výběr — klik rovnou otevírá.
       // Na dotyku bez výběru ťuknutí rovnou otevírá (dvojklik prstem je nepohodlný).
       if (handlers.readOnly || ((event.nativeEvent as PointerEvent).pointerType === "touch" && !handlers.selected.size)) return handlers.onOpen(entry);
@@ -120,7 +170,11 @@ function useItemProps(entry: Entry, handlers: ItemHandlers) {
       if (event.buttons & 1) handlers.setChecked?.(entry.name, paint.checked);
       else paint = null;
     },
-    onContextMenu: (event: React.MouseEvent) => handlers.onContextMenu(entry, event),
+    onContextMenu: (event: React.MouseEvent) => {
+      // Podržení prstem vyvolá i contextmenu — na dotyku podržení označuje, menu je pod ⋮.
+      if (touch) return event.preventDefault();
+      handlers.onContextMenu(entry, event);
+    },
     onDragStart: (event: React.DragEvent) => {
       const names = selected ? [...handlers.selected] : [entry.name];
       event.dataTransfer.setData(DRAG_TYPE, JSON.stringify(names));
@@ -206,7 +260,7 @@ function ListRow({ entry, handlers }: { entry: Entry; handlers: ItemHandlers }) 
   return (
     <div
       {...props}
-      className={`group grid cursor-default ${Columns(handlers)} items-center gap-3 rounded-xl px-2 py-1.5 select-none data-[drop=true]:bg-accent/15 data-[drop=true]:ring-2 data-[drop=true]:ring-accent ${
+      className={`group grid cursor-default [-webkit-touch-callout:none] ${Columns(handlers)} items-center gap-3 rounded-xl px-2 py-1.5 select-none data-[drop=true]:bg-accent/15 data-[drop=true]:ring-2 data-[drop=true]:ring-accent ${
         selected ? "bg-accent/10" : "hover:bg-default/60"
       } ${handlers.focused === entry.name ? "outline-2 -outline-offset-2 outline-focus/50" : ""}`}
     >
@@ -243,7 +297,7 @@ function GridTile({ entry, handlers }: { entry: Entry; handlers: ItemHandlers })
   return (
     <div
       {...props}
-      className={`group relative flex cursor-default flex-col overflow-hidden rounded-2xl border select-none data-[drop=true]:border-accent data-[drop=true]:bg-accent/15 ${
+      className={`group relative flex cursor-default [-webkit-touch-callout:none] flex-col overflow-hidden rounded-2xl border select-none data-[drop=true]:border-accent data-[drop=true]:bg-accent/15 ${
         selected ? "border-accent bg-accent/10" : "border-border bg-surface hover:border-muted/40"
       } ${handlers.focused === entry.name ? "outline-2 outline-offset-2 outline-focus/50" : ""}`}
     >
