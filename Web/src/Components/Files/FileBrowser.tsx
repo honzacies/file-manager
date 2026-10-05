@@ -901,7 +901,7 @@ export function FileBrowser() {
         {t("You can restore them from the trash for 30 days, then they're deleted for good.", "Z koše je můžeš 30 dní obnovit, potom se smažou natrvalo.")}
       </ConfirmDialog>
 
-      <PreviewModal entries={previewable} index={preview} onIndexChange={setPreview} onClose={() => setPreview(null)} urlFor={FileUrl} />
+      <PreviewModal entries={previewable} index={preview} onIndexChange={setPreview} onClose={() => setPreview(null)} urlFor={FileUrl} thumbFor={handlers.thumbUrl} />
     </div>
   );
 }

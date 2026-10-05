@@ -129,7 +129,10 @@ function ShareView() {
           }}
         />
       )}
-      <PreviewModal entries={previewable} index={preview} onIndexChange={setPreview} onClose={() => setPreview(null)} urlFor={(entry, inline) => FileUrl(entry, inline)} />
+      <PreviewModal entries={previewable} index={preview} onIndexChange={setPreview} onClose={() => setPreview(null)}
+        urlFor={(entry, inline) => FileUrl(entry, inline)}
+        thumbFor={(entry) => `/api/public/shares/${encodeURIComponent(token)}/thumb${Query({ path: JoinPath(path, entry.name), v: Math.round(entry.modified) })}`}
+      />
     </div>
   );
 }

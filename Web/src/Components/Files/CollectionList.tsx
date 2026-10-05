@@ -131,6 +131,10 @@ export function CollectionList({
         onIndexChange={setPreview}
         onClose={() => setPreview(null)}
         urlFor={(entry, inline) => FileUrl(entry as CollectionItem, inline)}
+        thumbFor={(entry) => {
+          const item = entry as CollectionItem;
+          return `/api/files/thumb${Query({ path: item.path, share: item.share, all: item.all, v: Math.round(item.modified) })}`;
+        }}
       />
     </>
   );
