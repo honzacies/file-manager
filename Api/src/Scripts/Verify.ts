@@ -479,8 +479,12 @@ try {
     assert.equal((await app.inject({ url: `/api/files/thumb?path=klip.mp4` })).statusCode, 401);
 
     const tags = (p: string, headers = alice) => app.inject({ url: `/api/files/tags?path=${encodeURIComponent(p)}`, headers });
-    assert.deepEqual((await tags("tagy.flac")).json(), { title: "Breed", artist: "Nirvana", album: "Nevermind" });
-    assert.deepEqual((await tags("bez-coveru.mp3")).json(), {}, "skladba bez tagů");
+    const flac = (await tags("tagy.flac")).json();
+    assert.deepEqual([flac.title, flac.artist, flac.album], ["Breed", "Nirvana", "Nevermind"]);
+    assert.match(flac.quality, /^FLAC \d+bit\/44\.1kHz$/);
+    const plain = (await tags("bez-coveru.mp3")).json();
+    assert.equal(plain.title, undefined, "skladba bez tagů");
+    assert.match(plain.quality, /^MP3 \d+kbps$/);
     assert.deepEqual((await tags("klip.mp4")).json(), {}, "video tagy nečte");
     assert.equal((await tags("../bob/x.txt", bob2)).statusCode, 404);
     assert.equal((await app.inject({ url: "/api/files/tags?path=tagy.flac" })).statusCode, 401);

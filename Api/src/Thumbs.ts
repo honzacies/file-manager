@@ -118,11 +118,13 @@ export interface Tags {
   title?: string;
   artist?: string;
   album?: string;
+  // kvalita nahrávky: "FLAC 16bit/44.1kHz", "MP3 320kbps"
+  quality?: string;
 }
 
 function RunFfprobe(abs: string) {
   return new Promise<string | null>((resolve) => {
-    const child = spawn(FFPROBE, ["-v", "error", "-show_entries", "format_tags:stream_tags", "-of", "json", abs], { stdio: ["ignore", "pipe", "ignore"], windowsHide: true });
+    const child = spawn(FFPROBE, ["-v", "error", "-show_entries", "format_tags:stream_tags:format=bit_rate:stream=codec_type,codec_name,sample_rate,bits_per_raw_sample,bits_per_sample,bit_rate", "-of", "json", abs], { stdio: ["ignore", "pipe", "ignore"], windowsHide: true });
     let out = "";
     child.stdout.setEncoding("utf8");
     child.stdout.on("data", (chunk: string) => (out += chunk));
@@ -133,8 +135,36 @@ function RunFfprobe(abs: string) {
 }
 
 // Klíče se liší podle formátu (MP3 "title", FLAC "TITLE", Ogg je má u streamu) → bez ohledu na velikost písmen.
+// Bezztrátové kodeky ukazují bitovou hloubku a vzorkování, ztrátové datový tok.
+const LOSSLESS: Record<string, string> = { flac: "FLAC", alac: "ALAC", wavpack: "WavPack", ape: "APE", tta: "TTA" };
+const LOSSY: Record<string, string> = { mp3: "MP3", aac: "AAC", opus: "Opus", vorbis: "Vorbis", wmav2: "WMA", ac3: "AC3", eac3: "E-AC3" };
+
+interface ProbeStream {
+  codec_type?: string;
+  codec_name?: string;
+  sample_rate?: string;
+  bits_per_raw_sample?: string;
+  bits_per_sample?: number;
+  bit_rate?: string;
+  tags?: Record<string, string>;
+}
+
+// "FLAC 16bit/44.1kHz", "MP3 320kbps", "Opus 256kbps"; neznámý kodek = jen jeho název velkými.
+export function Quality(stream: ProbeStream | undefined, formatBitRate?: string) {
+  const codec = stream?.codec_name;
+  if (!codec) return undefined;
+  const khz = Number(stream.sample_rate) / 1000;
+  const rate = khz ? `${Number(khz.toFixed(1))}kHz` : "";
+  const bits = Number(stream.bits_per_raw_sample) || Number(stream.bits_per_sample) || 0;
+  const pcm = codec.startsWith("pcm_");
+  const lossless = LOSSLESS[codec] ?? (pcm ? "PCM" : undefined);
+  if (lossless) return [lossless, [bits ? `${bits}bit` : "", rate].filter(Boolean).join("/")].filter(Boolean).join(" ");
+  const kbps = Math.round((Number(stream.bit_rate) || Number(formatBitRate) || 0) / 1000);
+  return [LOSSY[codec] ?? codec.toUpperCase(), kbps ? `${kbps}kbps` : ""].filter(Boolean).join(" ");
+}
+
 export function PickTags(json: string): Tags {
-  const data = JSON.parse(json) as { format?: { tags?: Record<string, string> }; streams?: { tags?: Record<string, string> }[] };
+  const data = JSON.parse(json) as { format?: { tags?: Record<string, string>; bit_rate?: string }; streams?: ProbeStream[] };
   const all: Record<string, string> = {};
   for (const tags of [...(data.streams ?? []).map((stream) => stream.tags), data.format?.tags]) {
     for (const [key, value] of Object.entries(tags ?? {})) {
@@ -142,7 +172,8 @@ export function PickTags(json: string): Tags {
       if (text) all[key.toLowerCase()] = text;
     }
   }
-  return { title: all.title, artist: all.artist ?? all.album_artist, album: all.album };
+  const audio = data.streams?.find((stream) => stream.codec_type === "audio");
+  return { title: all.title, artist: all.artist ?? all.album_artist, album: all.album, quality: Quality(audio, data.format?.bit_rate) };
 }
 
 // Prázdný objekt = tagy nejsou (nebo nejde o hudbu). Výsledek se cachuje vedle náhledů, ffprobe běží jednou na verzi souboru.
@@ -150,7 +181,7 @@ export async function GetTags(abs: string): Promise<Tags> {
   if (ThumbKind(path.basename(abs)) !== "audio") return {};
   const stat = await fs.stat(abs).catch(() => null);
   if (!stat?.isFile()) return {};
-  const file = path.join(THUMB_DIR, `${CacheKey(abs, stat)}.tags.json`);
+  const file = path.join(THUMB_DIR, `${CacheKey(abs, stat)}.tags2.json`);
   const cached = await fs.readFile(file, "utf8").catch(() => null);
   if (cached) return JSON.parse(cached) as Tags;
   const out = await Slot(() => RunFfprobe(abs));

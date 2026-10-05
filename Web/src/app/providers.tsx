@@ -14,6 +14,19 @@ export function Providers({ children }: { children: React.ReactNode }) {
     }
   }, []);
 
+  // iPhone (Safari) ignoruje user-scalable=no → přiblížení štípnutím zastavit tady: gesture* jsou události jen Safari,
+  // dvouprstý touchmove pokryje zbytek. Posouvání jedním prstem zůstává.
+  useEffect(() => {
+    const Stop = (event: Event) => event.preventDefault();
+    const StopPinch = (event: TouchEvent) => event.touches.length > 1 && event.preventDefault();
+    for (const name of ["gesturestart", "gesturechange", "gestureend"]) document.addEventListener(name, Stop, { passive: false });
+    document.addEventListener("touchmove", StopPinch, { passive: false });
+    return () => {
+      for (const name of ["gesturestart", "gesturechange", "gestureend"]) document.removeEventListener(name, Stop);
+      document.removeEventListener("touchmove", StopPinch);
+    };
+  }, []);
+
   return (
     <ThemeProvider attribute="data-theme" defaultTheme="system" enableSystem>
       <LanguageProvider>

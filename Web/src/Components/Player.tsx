@@ -14,6 +14,9 @@ const ICONS = {
   next: "M6 18l8.5-6L6 6v12zM16 6v12h2V6h-2z",
   play: "M8 5v14l11-7z",
   pause: "M6 19h4V5H6v14zm8-14v14h4V5h-4z",
+  shuffle: "M10.59 9.17L5.41 4 4 5.41l5.17 5.17 1.42-1.41zM14.5 4l2.04 2.04L4 18.59 5.41 20 17.96 7.46 20 9.5V4h-5.5zm.33 9.41l-1.41 1.41 3.13 3.13L14.5 20H20v-5.5l-2.04 2.04-3.13-3.13z",
+  repeat: "M7 7h10v3l4-4-4-4v3H5v6h2V7zm10 10H7v-3l-4 4 4 4v-3h12v-6h-2v4z",
+  repeatOne: "M7 7h10v3l4-4-4-4v3H5v6h2V7zm10 10H7v-3l-4 4 4 4v-3h12v-6h-2v4zm-4-2V9h-1l-2 1v1h1.5v4H13z",
   volumeUp:
     "M3 9v6h4l5 5V4L7 9H3zm13.5 3c0-1.77-1.02-3.29-2.5-4.03v8.05c1.48-.73 2.5-2.25 2.5-4.02zM14 3.23v2.06c2.89.86 5 3.54 5 6.71s-2.11 5.85-5 6.71v2.06c4.01-.91 7-4.49 7-8.77s-2.99-7.86-7-8.77z",
   volumeDown: "M18.5 12c0-1.77-1.02-3.29-2.5-4.03v8.05c1.48-.73 2.5-2.25 2.5-4.02zM5 9v6h4l5 5V4L9 9H5z",
@@ -42,6 +45,29 @@ const FALLBACK_COLORS = ["#d9302d", "#7b2cbf", "#1f4e79", "#3a0ca3"];
 // Než se obal načte, je pozadí černé a do barev obalu se prolne (žádné cizí barvy na začátku).
 const BLACK = ["#000", "#000", "#000", "#000"];
 const VOLUME_KEY = "cloud.volume";
+const MODE_KEY = "cloud.player";
+
+type Repeat = "off" | "all" | "one";
+
+// Náhodné pořadí fronty: aktuální skladba první, zbytek zamíchaný (Fisher–Yates).
+function ShuffledOrder(length: number, first: number) {
+  const rest = Array.from({ length }, (_, i) => i).filter((i) => i !== first);
+  for (let i = rest.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [rest[i], rest[j]] = [rest[j], rest[i]];
+  }
+  return [first, ...rest];
+}
+
+// Náhodně / opakování se pamatuje mezi návštěvami (jako hlasitost).
+function ReadMode(): { shuffle: boolean; repeat: Repeat } {
+  try {
+    const saved = JSON.parse(localStorage.getItem(MODE_KEY) ?? "{}");
+    return { shuffle: saved.shuffle === true, repeat: ["all", "one"].includes(saved.repeat) ? saved.repeat : "off" };
+  } catch {
+    return { shuffle: false, repeat: "off" };
+  }
+}
 
 // 4 barvy z obalu pro mesh gradient (výběr barev v lib/coverColors.ts).
 function useCoverColors(url: string | undefined) {
@@ -76,6 +102,8 @@ interface Tags {
   title?: string;
   artist?: string;
   album?: string;
+  // "FLAC 16bit/44.1kHz", "MP3 320kbps"
+  quality?: string;
 }
 
 // Tagy mají stejnou URL jako náhled, jen /tags místo /thumb (přihlášený prohlížeč i veřejné sdílení).
@@ -161,6 +189,11 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
     }
   });
   const [muted, setMuted] = useState(false);
+  const [mode, setMode] = useState(ReadMode);
+  // pořadí přehrávání při Náhodně (indexy do fronty), null = pořadí složky
+  const [order, setOrder] = useState<number[] | null>(null);
+  const shuffleRef = useRef(mode.shuffle);
+  shuffleRef.current = mode.shuffle;
   const touch = useTouch();
 
   const track = queue[index] as Track | undefined;
@@ -173,6 +206,7 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
   const Play = useCallback((next: Track[], at: number) => {
     setQueue(next);
     setIndex(at);
+    setOrder(shuffleRef.current ? ShuffledOrder(next.length, at) : null);
     setExpanded(true);
   }, []);
   const Stop = useCallback(() => {
@@ -182,9 +216,31 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
   }, []);
   const api = useMemo(() => ({ Play, Stop }), [Play, Stop]);
 
-  const Go = (offset: number) => {
-    if (queue[index + offset]) setIndex(index + offset);
+  // Další / předchozí podle pořadí (složka, nebo zamíchané); Opakovat vše jde dokola. null = není kam.
+  const sequence = order ?? queue.map((_, i) => i);
+  const position = sequence.indexOf(index);
+  const NextIndex = () => (position < sequence.length - 1 ? sequence[position + 1] : mode.repeat === "all" ? sequence[0] : null);
+  const PrevIndex = () => (position > 0 ? sequence[position - 1] : mode.repeat === "all" ? sequence[sequence.length - 1] : null);
+  const Restart = () => {
+    if (!audio.current) return;
+    audio.current.currentTime = 0;
+    audio.current.play().catch(() => setPlaying(false));
   };
+  // stejná skladba (fronta o jedné skladbě s Opakovat vše) → src se nezmění, přehrát znovu ručně
+  const GoTo = (target: number | null) => (target === null ? undefined : target === index ? Restart() : setIndex(target));
+  const Next = () => GoTo(NextIndex());
+  const SaveMode = (next: { shuffle: boolean; repeat: Repeat }) => {
+    setMode(next);
+    try {
+      localStorage.setItem(MODE_KEY, JSON.stringify(next));
+    } catch {}
+  };
+  const ToggleShuffle = () => {
+    SaveMode({ ...mode, shuffle: !mode.shuffle });
+    setOrder(mode.shuffle ? null : ShuffledOrder(queue.length, index));
+  };
+  // vypnuto → opakovat vše → opakovat jednu skladbu → vypnuto
+  const CycleRepeat = () => SaveMode({ ...mode, repeat: mode.repeat === "off" ? "all" : mode.repeat === "all" ? "one" : "off" });
   const Toggle = () => {
     const element = audio.current;
     if (!element) return;
@@ -194,7 +250,7 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
   // Jako v každém přehrávači: po pár sekundách "předchozí" vrací na začátek skladby.
   const Previous = () => {
     if (audio.current && audio.current.currentTime > 3) audio.current.currentTime = 0;
-    else Go(-1);
+    else GoTo(PrevIndex());
   };
 
   // Nová skladba: stejný element, nový zdroj a hned přehrát (spuštění je vždy po kliknutí uživatele).
@@ -232,8 +288,8 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
     });
     navigator.mediaSession.setActionHandler("play", () => audio.current?.play());
     navigator.mediaSession.setActionHandler("pause", () => audio.current?.pause());
-    navigator.mediaSession.setActionHandler("previoustrack", index > 0 ? Previous : null);
-    navigator.mediaSession.setActionHandler("nexttrack", index < queue.length - 1 ? () => Go(1) : null);
+    navigator.mediaSession.setActionHandler("previoustrack", PrevIndex() !== null ? Previous : null);
+    navigator.mediaSession.setActionHandler("nexttrack", NextIndex() !== null ? Next : null);
   });
 
   // Mezerník = play/pauza, šipky = posun o 10 s (jen v otevřeném přehrávači, jinde patří klávesy souborům).
@@ -314,7 +370,7 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
         onPause={() => setPlaying(false)}
         onTimeUpdate={(event) => setTime(event.currentTarget.currentTime)}
         onLoadedMetadata={(event) => setDuration(event.currentTarget.duration)}
-        onEnded={() => (index < queue.length - 1 ? Go(1) : setPlaying(false))}
+        onEnded={() => (mode.repeat === "one" ? Restart() : NextIndex() !== null ? Next() : setPlaying(false))}
         onError={() => track && setError(true)}
       />
 
@@ -387,7 +443,16 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
                         </div>
                       </div>
 
-                      <div className="flex items-center justify-center gap-6">
+                      <div className="flex items-center justify-between">
+                        <button
+                          type="button"
+                          onClick={ToggleShuffle}
+                          aria-pressed={mode.shuffle}
+                          aria-label={t("Shuffle", "Náhodně")}
+                          className={`player-button relative size-10 ${mode.shuffle ? "text-white after:absolute after:bottom-0.5 after:size-1 after:rounded-full after:bg-white" : "text-white/45"}`}
+                        >
+                          <Glyph d={ICONS.shuffle} className="size-6" />
+                        </button>
                         <button type="button" onClick={Previous} aria-label={t("Previous", "Předchozí")} className="player-button size-14">
                           <Glyph d={ICONS.previous} className="size-9" />
                         </button>
@@ -399,8 +464,18 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
                         >
                           <Glyph d={playing ? ICONS.pause : ICONS.play} className="size-9" />
                         </button>
-                        <button type="button" onClick={() => Go(1)} disabled={index >= queue.length - 1} aria-label={t("Next", "Další")} className="player-button size-14">
+                        <button type="button" onClick={Next} disabled={NextIndex() === null} aria-label={t("Next", "Další")} className="player-button size-14">
                           <Glyph d={ICONS.next} className="size-9" />
+                        </button>
+                        <button
+                          type="button"
+                          onClick={CycleRepeat}
+                          aria-label={
+                            mode.repeat === "one" ? t("Repeat one", "Opakovat skladbu") : mode.repeat === "all" ? t("Repeat all", "Opakovat vše") : t("Repeat off", "Neopakovat")
+                          }
+                          className={`player-button relative size-10 ${mode.repeat !== "off" ? "text-white after:absolute after:bottom-0.5 after:size-1 after:rounded-full after:bg-white" : "text-white/45"}`}
+                        >
+                          <Glyph d={mode.repeat === "one" ? ICONS.repeatOne : ICONS.repeat} className="size-6" />
                         </button>
                       </div>
 
@@ -421,6 +496,9 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
                           className="flex-1"
                         />
                       </div>
+                      )}
+                      {tags.quality && (
+                        <p className="self-center rounded-full border border-white/15 px-2.5 py-0.5 text-[11px] font-medium tracking-wide text-white/55 tabular-nums">{tags.quality}</p>
                       )}
                     </div>
                   </div>
@@ -458,8 +536,8 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
             </button>
             <button
               type="button"
-              onClick={() => Go(1)}
-              disabled={index >= queue.length - 1}
+              onClick={Next}
+              disabled={NextIndex() === null}
               aria-label={t("Next", "Další")}
               className="grid size-10 place-items-center rounded-full outline-none hover:bg-default focus-visible:ring-2 focus-visible:ring-focus disabled:opacity-35"
             >

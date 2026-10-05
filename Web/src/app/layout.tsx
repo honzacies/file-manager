@@ -18,7 +18,13 @@ export const metadata: Metadata = {
   appleWebApp: { capable: true, title: "Cloud", statusBarStyle: "black-translucent" },
 };
 
+// Appka se ovládá jako aplikace, přibližování stránky nechceme (dvojťuk ani štípnutí).
+// Safari v záložce maximum-scale ignoruje → štípnutí blokuje ještě providers.tsx.
 export const viewport: Viewport = {
+  width: "device-width",
+  initialScale: 1,
+  maximumScale: 1,
+  userScalable: false,
   themeColor: [
     { media: "(prefers-color-scheme: light)", color: "#faf8f8" },
     { media: "(prefers-color-scheme: dark)", color: "#141111" },
