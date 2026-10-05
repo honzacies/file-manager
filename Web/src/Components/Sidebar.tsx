@@ -122,7 +122,9 @@ function SidebarBody({ onNavigate }: { onNavigate?: () => void }) {
         {/* V Draweru (mobil) je zvoneček v horní liště, tady by byl dvakrát. */}
         {!onNavigate && <NotificationBell />}
       </div>
-      <nav aria-label={t("Main menu", "Hlavní menu")} className="flex flex-col gap-0.5">
+      {/* Na nízkém displeji (mobilní Chrome s adresním řádkem) se menu nevejde — roluje se jen ono,
+          profil a odhlášení zůstanou dole vidět. */}
+      <nav aria-label={t("Main menu", "Hlavní menu")} className="flex min-h-0 flex-1 flex-col gap-0.5 overflow-y-auto">
         {main.map((item) => (
           <NavLink key={item.label} item={item} onNavigate={onNavigate} />
         ))}
@@ -136,7 +138,7 @@ function SidebarBody({ onNavigate }: { onNavigate?: () => void }) {
         )}
       </nav>
 
-      <div className="mt-auto flex flex-col gap-3">
+      <div className="flex shrink-0 flex-col gap-3">
         <StorageMeter />
         <Separator />
         <ThemeToggle />
