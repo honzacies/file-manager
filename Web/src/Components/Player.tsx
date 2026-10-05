@@ -12,6 +12,7 @@ const ICONS = {
   next: "M6 18l8.5-6L6 6v12zM16 6v12h2V6h-2z",
   play: "M8 5v14l11-7z",
   pause: "M6 19h4V5H6v14zm8-14v14h4V5h-4z",
+  queue: "M15 6H3v2h12V6zm0 4H3v2h12v-2zM3 16h8v-2H3v2zM17 6v8.18c-.31-.11-.65-.18-1-.18-1.66 0-3 1.34-3 3s1.34 3 3 3 3-1.34 3-3V8h3V6h-5z",
   volumeUp:
     "M3 9v6h4l5 5V4L7 9H3zm13.5 3c0-1.77-1.02-3.29-2.5-4.03v8.05c1.48-.73 2.5-2.25 2.5-4.02zM14 3.23v2.06c2.89.86 5 3.54 5 6.71s-2.11 5.85-5 6.71v2.06c4.01-.91 7-4.49 7-8.77s-2.99-7.86-7-8.77z",
   volumeDown: "M18.5 12c0-1.77-1.02-3.29-2.5-4.03v8.05c1.48-.73 2.5-2.25 2.5-4.02zM5 9v6h4l5 5V4L9 9H5z",
@@ -39,7 +40,20 @@ export interface Track {
 const FALLBACK_COLORS = ["#d9302d", "#7b2cbf", "#1f4e79", "#3a0ca3"];
 const VOLUME_KEY = "cloud.volume";
 
-// 4 barvy z obalu pro mesh gradient: obal zmenšený na 2×2 px = průměrné barvy čtvrtin.
+function RgbToHsl(r: number, g: number, b: number): [number, number, number] {
+  const [rr, gg, bb] = [r / 255, g / 255, b / 255];
+  const max = Math.max(rr, gg, bb);
+  const min = Math.min(rr, gg, bb);
+  const l = (max + min) / 2;
+  if (max === min) return [0, 0, l];
+  const d = max - min;
+  const s = l > 0.5 ? d / (2 - max - min) : d / (max + min);
+  const h = max === rr ? (gg - bb) / d + (gg < bb ? 6 : 0) : max === gg ? (bb - rr) / d + 2 : (rr - gg) / d + 4;
+  return [h * 60, s, l];
+}
+
+// 4 barvy z obalu pro mesh gradient: obal zmenšený na 3×3 px, nejsytější políčka, zesílená
+// (tmavé a šedivé obaly by jinak daly hnědošedou kaši, na které pohyb skoro není vidět).
 function useCoverColors(url: string | undefined) {
   const [colors, setColors] = useState(FALLBACK_COLORS);
   useEffect(() => {
@@ -47,12 +61,19 @@ function useCoverColors(url: string | undefined) {
     const image = new Image();
     image.onload = () => {
       const canvas = document.createElement("canvas");
-      canvas.width = canvas.height = 2;
+      canvas.width = canvas.height = 3;
       const context = canvas.getContext("2d", { willReadFrequently: true });
       if (!context) return;
-      context.drawImage(image, 0, 0, 2, 2);
-      const data = context.getImageData(0, 0, 2, 2).data;
-      setColors([0, 1, 2, 3].map((i) => `rgb(${data[i * 4]} ${data[i * 4 + 1]} ${data[i * 4 + 2]})`));
+      context.drawImage(image, 0, 0, 3, 3);
+      const data = context.getImageData(0, 0, 3, 3).data;
+      const cells = Array.from({ length: 9 }, (_, i) => RgbToHsl(data[i * 4], data[i * 4 + 1], data[i * 4 + 2])).sort((a, b) => b[1] - a[1]);
+      // černobílý obal nechat šedý (umělá sytost by vymyslela barvu), jinak aspoň 55 % sytosti
+      const gray = cells[0][1] < 0.08;
+      setColors(
+        [cells[0], cells[1], cells[4], cells[8]].map(
+          ([h, sat, l]) => `hsl(${Math.round(h)} ${Math.round((gray ? sat : Math.max(sat, 0.55)) * 100)}% ${Math.round(Math.min(0.62, Math.max(0.32, l)) * 100)}%)`,
+        ),
+      );
     };
     image.onerror = () => setColors(FALLBACK_COLORS);
     image.src = url;
@@ -158,6 +179,8 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
     }
   });
   const [muted, setMuted] = useState(false);
+  // telefon: fronta místo obalu
+  const [showQueue, setShowQueue] = useState(false);
 
   const track = queue[index] as Track | undefined;
   const tagsOf = useTags(queue);
@@ -256,6 +279,48 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
   const volumeIcon = muted || volume === 0 ? ICONS.volumeOff : volume < 0.5 ? ICONS.volumeDown : ICONS.volumeUp;
   const progress = duration > 0 ? Math.min(100, (time / duration) * 100) : 0;
 
+  // Fronta — funkce, ne komponenta: komponenta definovaná v renderu by se pokaždé přemontovala (a ztratila posun).
+  const QueueList = (className: string) => (
+    <div className={`flex min-h-0 flex-col rounded-3xl border border-white/10 bg-white/[0.06] backdrop-blur-3xl backdrop-saturate-150 ${className}`}>
+      <p className="px-5 pt-4 pb-2 text-sm font-semibold">
+        {t("Queue", "Fronta")} <span className="font-normal text-white/60">· {queue.length}</span>
+      </p>
+      <ol className="min-h-0 overflow-y-auto px-2 pb-2">
+        {queue.map((item, i) => {
+          const current = i === index;
+          const itemTags = tagsOf(item);
+          return (
+            <li key={item.src}>
+              <button
+                type="button"
+                onClick={() => (current ? Toggle() : setIndex(i))}
+                aria-current={current ? "true" : undefined}
+                className={`flex w-full items-center gap-3 rounded-2xl px-3 py-2 text-left outline-none transition-colors focus-visible:ring-2 focus-visible:ring-white/60 ${
+                  current ? "bg-white/15" : "hover:bg-white/10"
+                }`}
+              >
+                <Cover key={item.thumb} url={item.thumb} className="size-11 shrink-0 rounded-lg" />
+                <span className="min-w-0 flex-1">
+                  <span className={`block truncate text-sm ${current ? "font-semibold" : "text-white/85"}`}>{itemTags.title ?? TrackTitle(item.name)}</span>
+                  {itemTags.artist && <span className="block truncate text-xs text-white/55">{itemTags.artist}</span>}
+                </span>
+                {current ? (
+                  <span className="eq" data-paused={playing ? undefined : ""} aria-hidden>
+                    <span />
+                    <span />
+                    <span />
+                  </span>
+                ) : (
+                  <span className="w-5 text-right text-xs text-white/45 tabular-nums">{i + 1}</span>
+                )}
+              </button>
+            </li>
+          );
+        })}
+      </ol>
+    </div>
+  );
+
   return (
     <PlayerContext value={api}>
       {children}
@@ -301,22 +366,27 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
                 </Button>
               </header>
 
-              <div className="flex min-h-0 flex-1 items-center justify-center px-4 pb-4 sm:px-16">
-                <div className="flex h-full w-full max-w-6xl flex-col gap-6 lg:flex-row lg:items-center">
-                  <div className="flex min-h-0 flex-1 flex-col items-center justify-center gap-10">
-                    <div
-                      className={`aspect-square w-[min(72vw,42dvh,26rem)] transition-transform duration-700 ease-[cubic-bezier(0.22,1,0.36,1)] ${
-                        playing ? "scale-100" : "scale-[0.8]"
-                      }`}
-                    >
-                      <Cover
-                        key={track.thumb}
-                        url={track.thumb}
-                        className={`size-full rounded-2xl transition-shadow duration-700 ${playing ? "shadow-[0_20px_50px_rgb(0_0_0/0.45)]" : "shadow-[0_12px_30px_rgb(0_0_0/0.35)]"}`}
-                      />
+              <div className="flex min-h-0 flex-1 justify-center px-4 pb-[max(1rem,env(safe-area-inset-bottom))] sm:px-8 lg:px-16">
+                <div className="flex min-h-0 w-full max-w-6xl gap-10">
+                  <div className="flex min-h-0 flex-1 flex-col items-center gap-6 lg:justify-center">
+                    {/* Obal (na telefonu místo něj fronta) zabere, kolik místa zbývá. Velikost obalu
+                        z rozměrů kontejneru (cqw/cqh) — na malé obrazovce se zmenší, nikdy nepřeteče přes ovládání. */}
+                    <div className="flex min-h-0 w-full flex-1 items-center justify-center [container-type:size] lg:h-[min(26rem,55dvh)] lg:flex-none">
+                      {showQueue && QueueList("h-full w-full max-w-md lg:hidden")}
+                      <div
+                        className={`aspect-square w-[min(100cqw,100cqh,26rem)] transition-transform duration-700 ease-[cubic-bezier(0.22,1,0.36,1)] ${
+                          playing ? "scale-100" : "scale-[0.8]"
+                        } ${showQueue ? "hidden lg:block" : ""}`}
+                      >
+                        <Cover
+                          key={track.thumb}
+                          url={track.thumb}
+                          className={`size-full rounded-2xl transition-shadow duration-700 ${playing ? "shadow-[0_20px_50px_rgb(0_0_0/0.45)]" : "shadow-[0_12px_30px_rgb(0_0_0/0.35)]"}`}
+                        />
+                      </div>
                     </div>
 
-                    <div className="flex w-full max-w-md flex-col gap-4">
+                    <div className="flex w-full max-w-md shrink-0 flex-col gap-4">
                       <div className="min-w-0 text-center">
                         <p className="truncate text-xl font-semibold" title={track.name}>
                           {title}
@@ -367,49 +437,24 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
                           }}
                           className="flex-1"
                         />
+                        {/* Na telefonu se fronta ukazuje místo obalu; na širší obrazovce je pořád vpravo. */}
+                        {queue.length > 1 && (
+                          <button
+                            type="button"
+                            onClick={() => setShowQueue((v) => !v)}
+                            aria-pressed={showQueue}
+                            aria-label={t("Queue", "Fronta")}
+                            className={`player-button size-9 lg:hidden ${showQueue ? "bg-white/20" : ""}`}
+                          >
+                            <Glyph d={ICONS.queue} className="size-6" />
+                          </button>
+                        )}
                       </div>
                     </div>
                   </div>
 
                   {queue.length > 1 && (
-                    <aside className="flex max-h-[32dvh] min-h-0 w-full flex-col rounded-3xl border border-white/10 bg-white/[0.06] backdrop-blur-3xl backdrop-saturate-150 lg:max-h-[72dvh] lg:w-[26rem]">
-                      <p className="px-5 pt-4 pb-2 text-sm font-semibold">
-                        {t("Queue", "Fronta")} <span className="font-normal text-white/60">· {queue.length}</span>
-                      </p>
-                      <ol className="min-h-0 overflow-y-auto px-2 pb-2">
-                        {queue.map((item, i) => {
-                          const current = i === index;
-                          const itemTags = tagsOf(item);
-                          return (
-                            <li key={item.src}>
-                              <button
-                                type="button"
-                                onClick={() => (current ? Toggle() : setIndex(i))}
-                                aria-current={current ? "true" : undefined}
-                                className={`flex w-full items-center gap-3 rounded-2xl px-3 py-2 text-left outline-none transition-colors focus-visible:ring-2 focus-visible:ring-white/60 ${
-                                  current ? "bg-white/15" : "hover:bg-white/10"
-                                }`}
-                              >
-                                <Cover key={item.thumb} url={item.thumb} className="size-11 shrink-0 rounded-lg" />
-                                <span className="min-w-0 flex-1">
-                                  <span className={`block truncate text-sm ${current ? "font-semibold" : "text-white/85"}`}>{itemTags.title ?? TrackTitle(item.name)}</span>
-                                  {itemTags.artist && <span className="block truncate text-xs text-white/55">{itemTags.artist}</span>}
-                                </span>
-                                {current ? (
-                                  <span className="eq" data-paused={playing ? undefined : ""} aria-hidden>
-                                    <span />
-                                    <span />
-                                    <span />
-                                  </span>
-                                ) : (
-                                  <span className="w-5 text-right text-xs text-white/45 tabular-nums">{i + 1}</span>
-                                )}
-                              </button>
-                            </li>
-                          );
-                        })}
-                      </ol>
-                    </aside>
+                    <aside className="hidden max-h-[72dvh] w-[26rem] self-center lg:flex">{QueueList("h-full w-full")}</aside>
                   )}
                 </div>
               </div>

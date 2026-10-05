@@ -95,23 +95,24 @@ body {
 /* Přehrávač hudby (AudioPlayer): mesh gradient z barev obalu, posuvníky, ekvalizér ve frontě. */
 .mesh-blob {
   position: absolute;
-  width: 75vmax;
-  height: 75vmax;
+  width: 80vmax;
+  height: 80vmax;
   border-radius: 9999px;
-  filter: blur(90px);
-  opacity: 0.85;
+  filter: blur(70px);
+  opacity: 0.9;
   transition: background-color 1.5s ease;
   will-change: transform;
 }
-.mesh-blob-0 { top: -30vmax; left: -25vmax; animation: mesh-0 24s ease-in-out infinite alternate; }
-.mesh-blob-1 { top: -25vmax; right: -30vmax; animation: mesh-1 28s ease-in-out infinite alternate; }
-.mesh-blob-2 { bottom: -30vmax; left: -20vmax; animation: mesh-2 26s ease-in-out infinite alternate; }
-.mesh-blob-3 { bottom: -35vmax; right: -25vmax; animation: mesh-3 30s ease-in-out infinite alternate; }
+.mesh-blob-0 { top: -35vmax; left: -30vmax; animation: mesh-0 16s ease-in-out infinite; }
+.mesh-blob-1 { top: -30vmax; right: -35vmax; animation: mesh-1 19s ease-in-out infinite; }
+.mesh-blob-2 { bottom: -35vmax; left: -25vmax; animation: mesh-2 22s ease-in-out infinite; }
+.mesh-blob-3 { bottom: -40vmax; right: -30vmax; animation: mesh-3 25s ease-in-out infinite; }
+/* pauza = pozadí zamrzne na místě (a po spuštění pokračuje odtud) */
 .mesh[data-paused] .mesh-blob { animation-play-state: paused; }
-@keyframes mesh-0 { to { transform: translate(25vmax, 20vmax) scale(1.25); } }
-@keyframes mesh-1 { to { transform: translate(-30vmax, 25vmax) scale(0.85); } }
-@keyframes mesh-2 { to { transform: translate(30vmax, -25vmax) scale(1.15); } }
-@keyframes mesh-3 { to { transform: translate(-20vmax, -30vmax) scale(1.3); } }
+@keyframes mesh-0 { 33% { transform: translate(35vmax, 15vmax) scale(1.3) rotate(40deg); } 66% { transform: translate(10vmax, 40vmax) scale(0.85) rotate(-20deg); } }
+@keyframes mesh-1 { 33% { transform: translate(-40vmax, 25vmax) scale(0.8) rotate(-30deg); } 66% { transform: translate(-15vmax, 45vmax) scale(1.25) rotate(25deg); } }
+@keyframes mesh-2 { 33% { transform: translate(40vmax, -30vmax) scale(1.2) rotate(30deg); } 66% { transform: translate(15vmax, -10vmax) scale(0.9) rotate(-35deg); } }
+@keyframes mesh-3 { 33% { transform: translate(-30vmax, -40vmax) scale(1.35) rotate(-25deg); } 66% { transform: translate(-45vmax, -15vmax) scale(0.85) rotate(30deg); } }
 
 .player-button {
   display: grid;
@@ -147,6 +148,8 @@ body {
 .eq[data-paused] span { animation-play-state: paused; }
 @keyframes eq { from { height: 25%; } to { height: 100%; } }
 
+/* omezené animace v systému: pozadí se jen velmi pomalu přelévá, ekvalizér stojí */
 @media (prefers-reduced-motion: reduce) {
-  .mesh-blob, .eq span { animation: none; }
+  .mesh-blob { animation-duration: 90s; }
+  .eq span { animation: none; }
 }
